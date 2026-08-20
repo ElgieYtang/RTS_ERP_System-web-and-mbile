@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { TransactionWorkflow } from "@/components/workflow/TransactionWorkflow";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { TableActions } from "@/components/ui/action-menu";
+import { TABLE_ACTIONS_CELL_CLASS, TABLE_ACTIONS_HEAD_CLASS, TableActions } from "@/components/ui/action-menu";
 import { Modal } from "@/components/ui/modal";
 import {
   Table,
@@ -19,6 +19,7 @@ import { EmptyState, TableFilters } from "@/components/ui/table-filters";
 import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { useDemo } from "@/context/DemoContext";
 import { formatCurrency } from "@/lib/format";
+import { filterByDateRange } from "@/lib/dateFilter";
 import { getStatusDisplay } from "@/lib/status";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useMemo, useState } from "react";
@@ -28,7 +29,9 @@ function PurchaseOrdersPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("pending");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [viewId, setViewId] = useState(null);
   const filtered = useMemo(() => {
     let list = state.purchaseOrders;
@@ -41,8 +44,9 @@ function PurchaseOrdersPage() {
     if (statusFilter !== "all") {
       list = list.filter((po) => po.status === statusFilter);
     }
+    list = filterByDateRange(list, dateFrom, dateTo, "date");
     return list;
-  }, [state.purchaseOrders, search, statusFilter, getSupplierName]);
+  }, [state.purchaseOrders, search, statusFilter, dateFrom, dateTo, getSupplierName]);
   const viewPo = viewId ? state.purchaseOrders.find((p) => p.id === viewId) : null;
   const openDetail = (id) => {
     if (isMobile) navigate(`/purchase-order/${id}`);
@@ -71,10 +75,10 @@ function PurchaseOrdersPage() {
         active: statusFilter,
         onChange: setStatusFilter,
         tabs: [
+          { key: "all", label: "All", count: state.purchaseOrders.length },
           { key: "pending", label: "Pending", count: state.purchaseOrders.filter((p) => p.status === "pending").length },
           { key: "approved", label: "Approved", count: state.purchaseOrders.filter((p) => p.status === "approved").length },
-          { key: "fully_received", label: "Completed", count: state.purchaseOrders.filter((p) => p.status === "fully_received").length },
-          { key: "all", label: "All", count: state.purchaseOrders.length }
+          { key: "fully_received", label: "Completed", count: state.purchaseOrders.filter((p) => p.status === "fully_received").length }
         ]
       }
     ),
@@ -82,7 +86,12 @@ function PurchaseOrdersPage() {
       TableFilters,
       {
         search,
-        onSearchChange: setSearch
+        onSearchChange: setSearch,
+        showDateRange: true,
+        dateFrom,
+        dateTo,
+        onDateFromChange: setDateFrom,
+        onDateToChange: setDateTo
       }
     ),
     /* @__PURE__ */ jsx(
@@ -111,7 +120,7 @@ function PurchaseOrdersPage() {
             /* @__PURE__ */ jsx(TableHead, { children: "Date" }),
             /* @__PURE__ */ jsx(TableHead, { children: "Amount" }),
             /* @__PURE__ */ jsx(TableHead, { children: "Status" }),
-            /* @__PURE__ */ jsx(TableHead, { children: "Actions" })
+            /* @__PURE__ */ jsx(TableHead, { className: TABLE_ACTIONS_HEAD_CLASS, children: "Actions" })
           ] }) }),
           /* @__PURE__ */ jsx(TableBody, { children: filtered.length === 0 ? /* @__PURE__ */ jsx(TableRow, { className: "hover:bg-transparent", children: /* @__PURE__ */ jsx(TableCell, { colSpan: 7, children: /* @__PURE__ */ jsx(EmptyState, {}) }) }) : filtered.map((po) => {
             const st = getStatusDisplay(po.status);
@@ -122,18 +131,13 @@ function PurchaseOrdersPage() {
               /* @__PURE__ */ jsx(TableCell, { children: po.date }),
               /* @__PURE__ */ jsx(TableCell, { children: formatCurrency(po.total) }),
               /* @__PURE__ */ jsx(TableCell, { children: /* @__PURE__ */ jsx(Badge, { variant: st.variant, children: st.label }) }),
-              /* @__PURE__ */ jsx(TableCell, { children: /* @__PURE__ */ jsx(
+              /* @__PURE__ */ jsx(TableCell, { className: TABLE_ACTIONS_CELL_CLASS, children: /* @__PURE__ */ jsx(
                 TableActions,
                 {
-                  onView: () => openDetail(po.id),
-                  menuItems: [
-                    { label: "Preview", onClick: () => navigate(`/purchase-order/${po.id}/preview`) },
-                    { label: "Print", onClick: () => {
-                      navigate(`/purchase-order/${po.id}/preview`);
-                      setTimeout(() => window.print(), 300);
-                    } },
-                    { label: "Receive Items", onClick: () => receiveItems(po.id) }
-                  ]
+                  onPrint: () => {
+                    navigate(`/purchase-order/${po.id}/preview`);
+                    setTimeout(() => window.print(), 300);
+                  }
                 }
               ) })
             ] }, po.id);

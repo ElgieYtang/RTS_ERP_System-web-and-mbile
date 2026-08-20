@@ -1,90 +1,105 @@
-import { jsx, jsxs } from "react/jsx-runtime";
 import {
   DocumentLayout,
-  PrintActions
+  PrintActions,
 } from "@/components/documents/DocumentLayout";
 import { useDemo } from "@/context/DemoContext";
 import { formatCurrency } from "@/lib/format";
-import { useNavigate } from "react-router-dom";
-function SOAPreviewPage() {
+import { buildCustomerLedgerRows } from "@/lib/ledgerUtils";
+import { useMemo } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+
+export function SOAPreviewPage() {
   const navigate = useNavigate();
-  const { state } = useDemo();
-  const customerId = "cust-abc";
+  const [searchParams] = useSearchParams();
+  const { state, getCustomerName } = useDemo();
+
+  const customerId =
+    searchParams.get("customerId") ?? state.customers[0]?.id ?? "";
   const customer = state.customers.find((c) => c.id === customerId);
   const bills = state.billingStatements.filter((b) => b.customerId === customerId);
   const payments = state.soaPayments.filter((p) => p.customerId === customerId);
-  const totalCharges = bills.reduce((s, b) => s + b.amount, 0);
-  const totalPayments = payments.reduce((s, p) => s + p.amount, 0);
+
+  const transactions = useMemo(
+    () => buildCustomerLedgerRows(bills, payments, getCustomerName),
+    [bills, payments, getCustomerName],
+  );
+
+  const totalCharges = bills.reduce((sum, bill) => sum + bill.amount, 0);
+  const totalPayments = payments.reduce((sum, payment) => sum + payment.amount, 0);
   const outstanding = totalCharges - totalPayments;
-  return /* @__PURE__ */ jsxs("div", { children: [
-    /* @__PURE__ */ jsxs(DocumentLayout, { title: "STATEMENT OF ACCOUNT", children: [
-      /* @__PURE__ */ jsxs("div", { className: "space-y-1 text-sm", children: [
-        /* @__PURE__ */ jsxs("p", { children: [
-          /* @__PURE__ */ jsx("span", { className: "text-text-secondary", children: "Customer:" }),
-          " ",
-          customer?.name
-        ] }),
-        /* @__PURE__ */ jsxs("p", { children: [
-          /* @__PURE__ */ jsx("span", { className: "text-text-secondary", children: "Period:" }),
-          " August 1\u201319, 2026"
-        ] })
-      ] }),
-      /* @__PURE__ */ jsxs("table", { className: "mt-6 w-full text-sm", children: [
-        /* @__PURE__ */ jsx("thead", { children: /* @__PURE__ */ jsxs("tr", { className: "border-b border-border text-left text-xs uppercase text-text-secondary", children: [
-          /* @__PURE__ */ jsx("th", { className: "pb-2", children: "Date" }),
-          /* @__PURE__ */ jsx("th", { className: "pb-2", children: "Reference" }),
-          /* @__PURE__ */ jsx("th", { className: "pb-2", children: "Description" }),
-          /* @__PURE__ */ jsx("th", { className: "pb-2 text-right", children: "Debit" }),
-          /* @__PURE__ */ jsx("th", { className: "pb-2 text-right", children: "Credit" }),
-          /* @__PURE__ */ jsx("th", { className: "pb-2 text-right", children: "Balance" })
-        ] }) }),
-        /* @__PURE__ */ jsxs("tbody", { children: [
-          bills.map((b) => /* @__PURE__ */ jsxs("tr", { className: "border-b border-border", children: [
-            /* @__PURE__ */ jsx("td", { className: "py-2", children: b.billingDate }),
-            /* @__PURE__ */ jsx("td", { children: b.id }),
-            /* @__PURE__ */ jsx("td", { children: "Laptop Computer Purchase" }),
-            /* @__PURE__ */ jsx("td", { className: "text-right", children: formatCurrency(b.amount) }),
-            /* @__PURE__ */ jsx("td", { className: "text-right", children: "\u2014" }),
-            /* @__PURE__ */ jsx("td", { className: "text-right", children: formatCurrency(b.amount) })
-          ] }, b.id)),
-          payments.map((p) => /* @__PURE__ */ jsxs("tr", { className: "border-b border-border", children: [
-            /* @__PURE__ */ jsx("td", { className: "py-2", children: p.date }),
-            /* @__PURE__ */ jsx("td", { children: p.reference }),
-            /* @__PURE__ */ jsx("td", { children: p.description }),
-            /* @__PURE__ */ jsx("td", { className: "text-right", children: "\u2014" }),
-            /* @__PURE__ */ jsx("td", { className: "text-right", children: formatCurrency(p.amount) }),
-            /* @__PURE__ */ jsx("td", { className: "text-right", children: formatCurrency(totalCharges - p.amount) })
-          ] }, p.id))
-        ] })
-      ] }),
-      /* @__PURE__ */ jsxs("div", { className: "mt-6 space-y-2 text-sm", children: [
-        /* @__PURE__ */ jsxs("div", { className: "flex justify-between", children: [
-          /* @__PURE__ */ jsx("span", { children: "Total Charges:" }),
-          /* @__PURE__ */ jsx("span", { children: formatCurrency(totalCharges) })
-        ] }),
-        /* @__PURE__ */ jsxs("div", { className: "flex justify-between", children: [
-          /* @__PURE__ */ jsx("span", { children: "Total Payments:" }),
-          /* @__PURE__ */ jsx("span", { children: formatCurrency(totalPayments) })
-        ] }),
-        /* @__PURE__ */ jsxs("div", { className: "flex justify-between font-bold text-maroon", children: [
-          /* @__PURE__ */ jsx("span", { children: "Outstanding Balance:" }),
-          /* @__PURE__ */ jsx("span", { children: formatCurrency(outstanding) })
-        ] })
-      ] }),
-      /* @__PURE__ */ jsxs("div", { className: "mt-12 grid grid-cols-2 gap-8 text-sm", children: [
-        /* @__PURE__ */ jsxs("div", { children: [
-          /* @__PURE__ */ jsx("p", { className: "text-text-secondary", children: "Prepared By" }),
-          /* @__PURE__ */ jsx("p", { className: "mt-8 border-t border-border pt-2", children: "Admin User" })
-        ] }),
-        /* @__PURE__ */ jsxs("div", { children: [
-          /* @__PURE__ */ jsx("p", { className: "text-text-secondary", children: "Authorized Signature" }),
-          /* @__PURE__ */ jsx("p", { className: "mt-8 border-t border-border pt-2", children: "\xA0" })
-        ] })
-      ] })
-    ] }),
-    /* @__PURE__ */ jsx(PrintActions, { onBack: () => navigate("/soa") })
-  ] });
+
+  const backPath = customerId
+    ? `/soa?customerId=${encodeURIComponent(customerId)}`
+    : "/soa";
+
+  return (
+    <div>
+      <DocumentLayout title="STATEMENT OF ACCOUNT">
+        <div className="space-y-1 text-sm">
+          <p>
+            <span className="text-text-secondary">Customer:</span> {customer?.name}
+          </p>
+          <p>
+            <span className="text-text-secondary">Period:</span> August 1–19, 2026
+          </p>
+        </div>
+
+        <table className="mt-6 w-full text-sm">
+          <thead>
+            <tr className="border-b border-border text-left text-xs uppercase text-text-secondary">
+              <th className="pb-2">Date</th>
+              <th className="pb-2">Reference</th>
+              <th className="pb-2">Description</th>
+              <th className="pb-2 text-right">Debit</th>
+              <th className="pb-2 text-right">Credit</th>
+              <th className="pb-2 text-right">Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {transactions.map((row, index) => (
+              <tr key={`${row.ref}-${index}`} className="border-b border-border">
+                <td className="py-2">{row.date}</td>
+                <td>{row.ref}</td>
+                <td>{row.description}</td>
+                <td className="text-right">
+                  {row.debit ? formatCurrency(row.debit) : "—"}
+                </td>
+                <td className="text-right">
+                  {row.credit ? formatCurrency(row.credit) : "—"}
+                </td>
+                <td className="text-right">{formatCurrency(row.balance)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="mt-6 space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span>Total Charges:</span>
+            <span>{formatCurrency(totalCharges)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Total Payments:</span>
+            <span>{formatCurrency(totalPayments)}</span>
+          </div>
+          <div className="flex justify-between font-bold text-maroon">
+            <span>Outstanding Balance:</span>
+            <span>{formatCurrency(outstanding)}</span>
+          </div>
+        </div>
+
+        <div className="mt-12 grid grid-cols-2 gap-8 text-sm">
+          <div>
+            <p className="text-text-secondary">Prepared By</p>
+            <p className="mt-8 border-t border-border pt-2">Admin User</p>
+          </div>
+          <div>
+            <p className="text-text-secondary">Authorized Signature</p>
+            <p className="mt-8 border-t border-border pt-2">&nbsp;</p>
+          </div>
+        </div>
+      </DocumentLayout>
+      <PrintActions onBack={() => navigate(backPath)} />
+    </div>
+  );
 }
-export {
-  SOAPreviewPage
-};

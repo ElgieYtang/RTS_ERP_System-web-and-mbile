@@ -5,7 +5,7 @@ import { TransactionWorkflow } from "@/components/workflow/TransactionWorkflow";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { TableActions } from "@/components/ui/action-menu";
+import { TABLE_ACTIONS_CELL_CLASS, TABLE_ACTIONS_HEAD_CLASS, TableActions } from "@/components/ui/action-menu";
 import { Modal } from "@/components/ui/modal";
 import {
   Table,
@@ -19,6 +19,7 @@ import {
 import { EmptyState, TableFilters } from "@/components/ui/table-filters";
 import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { useDemo } from "@/context/DemoContext";
+import { filterByDateRange } from "@/lib/dateFilter";
 import { getStatusDisplay } from "@/lib/status";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useMemo, useState } from "react";
@@ -33,7 +34,9 @@ function DeliveryReceiptsPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [search, setSearch] = useState("");
-  const [statusTab, setStatusTab] = useState("active");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [statusTab, setStatusTab] = useState("all");
   const [viewId, setViewId] = useState(null);
   const [deliverId, setDeliverId] = useState(null);
   const counts = useMemo(() => ({
@@ -53,10 +56,11 @@ function DeliveryReceiptsPage() {
     if (statusTab !== "all") {
       list = list.filter((d) => d.status === statusTab);
     }
+    list = filterByDateRange(list, dateFrom, dateTo, "date");
     const order = ["active", "out_for_delivery", "delivered"];
     list.sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status));
     return list;
-  }, [state.deliveryReceipts, search, statusTab, getCustomerName]);
+  }, [state.deliveryReceipts, search, statusTab, dateFrom, dateTo, getCustomerName]);
   const viewDr = viewId ? state.deliveryReceipts.find((d) => d.id === viewId) : null;
   const openDetail = (id) => {
     if (isMobile) navigate(`/delivery-receipt/${id}`);
@@ -77,14 +81,14 @@ function DeliveryReceiptsPage() {
         active: statusTab,
         onChange: setStatusTab,
         tabs: [
+          { key: "all", label: "All", count: counts.all },
           { key: "active", label: "Active", count: counts.active },
           { key: "out_for_delivery", label: "Out for Delivery", count: counts.out_for_delivery },
-          { key: "delivered", label: "Delivered", count: counts.delivered },
-          { key: "all", label: "All", count: counts.all }
+          { key: "delivered", label: "Delivered", count: counts.delivered }
         ]
       }
     ),
-    /* @__PURE__ */ jsx(TableFilters, { search, onSearchChange: setSearch, searchPlaceholder: "Search delivery receipts..." }),
+    /* @__PURE__ */ jsx(TableFilters, { search, onSearchChange: setSearch, searchPlaceholder: "Search delivery receipts...", showDateRange: true, dateFrom, dateTo, onDateFromChange: setDateFrom, onDateToChange: setDateTo }),
     /* @__PURE__ */ jsx(
       ResponsiveTable,
       {
@@ -112,7 +116,7 @@ function DeliveryReceiptsPage() {
             /* @__PURE__ */ jsx(TableHead, { children: "Driver" }),
             /* @__PURE__ */ jsx(TableHead, { children: "Vehicle" }),
             /* @__PURE__ */ jsx(TableHead, { children: "Status" }),
-            /* @__PURE__ */ jsx(TableHead, { children: "Actions" })
+            /* @__PURE__ */ jsx(TableHead, { className: TABLE_ACTIONS_HEAD_CLASS, children: "Actions" })
           ] }) }),
           /* @__PURE__ */ jsx(TableBody, { children: filtered.length === 0 ? /* @__PURE__ */ jsx(TableRow, { className: "hover:bg-transparent", children: /* @__PURE__ */ jsx(TableCell, { colSpan: 8, children: /* @__PURE__ */ jsx(EmptyState, {}) }) }) : filtered.map((d) => {
             const st = getStatusDisplay(d.status);
@@ -124,19 +128,13 @@ function DeliveryReceiptsPage() {
               /* @__PURE__ */ jsx(TableCell, { children: d.driver }),
               /* @__PURE__ */ jsx(TableCell, { children: d.vehicle }),
               /* @__PURE__ */ jsx(TableCell, { children: /* @__PURE__ */ jsx(Badge, { variant: st.variant, children: st.label }) }),
-              /* @__PURE__ */ jsx(TableCell, { children: /* @__PURE__ */ jsx(
+              /* @__PURE__ */ jsx(TableCell, { className: TABLE_ACTIONS_CELL_CLASS, children: /* @__PURE__ */ jsx(
                 TableActions,
                 {
-                  onView: () => openDetail(d.id),
-                  menuItems: [
-                    { label: "Preview", onClick: () => navigate(`/delivery-receipt/${d.id}/preview`) },
-                    { label: "Print", onClick: () => {
-                      navigate(`/delivery-receipt/${d.id}/preview`);
-                      setTimeout(() => window.print(), 300);
-                    } },
-                    ...d.status === "active" ? [{ label: "Out for Delivery", onClick: () => markDeliveryOutForDelivery(d.id) }] : [],
-                    ...d.status === "out_for_delivery" ? [{ label: "Mark as Delivered", onClick: () => setDeliverId(d.id) }] : []
-                  ]
+                  onPrint: () => {
+                    navigate(`/delivery-receipt/${d.id}/preview`);
+                    setTimeout(() => window.print(), 300);
+                  }
                 }
               ) })
             ] }, d.id);

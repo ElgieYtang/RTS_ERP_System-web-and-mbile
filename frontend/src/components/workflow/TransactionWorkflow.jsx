@@ -1,9 +1,11 @@
 import { jsx, jsxs } from "react/jsx-runtime";
 import { useDemo } from "@/context/DemoContext";
+import { SHOW_TRANSACTION_WORKFLOW } from "@/config/featureFlags";
 import { getStatusDisplay } from "@/lib/status";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 function TransactionWorkflow({ quotationId }) {
+  if (!SHOW_TRANSACTION_WORKFLOW) return null;
   const { state } = useDemo();
   const qtn = quotationId ? state.quotations.find((q) => q.id === quotationId) : state.quotations.find((q) => q.id === "QTN-00001");
   if (!qtn) return null;

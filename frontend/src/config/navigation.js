@@ -4,6 +4,7 @@ import {
   Box,
   Building2,
   ClipboardList,
+  FileSpreadsheet,
   FileText,
   FolderKanban,
   Home,
@@ -30,6 +31,7 @@ const navigation = [
       { label: "Receiving", path: "/inventory/receiving", icon: ClipboardList },
       { label: "Delivery Receipts", path: "/delivery-receipt", icon: Truck },
       { label: "Billing", path: "/billing", icon: Receipt },
+      { label: "Statement of Account", path: "/soa", icon: FileSpreadsheet },
       { label: "Accomplishments", path: "/reports/accomplishment", icon: BarChart3 }
     ]
   },
@@ -52,7 +54,11 @@ const navigation = [
   },
   {
     heading: "REPORTS",
-    items: [{ label: "Inventory", path: "/reports/inventory", icon: Package }]
+    items: [
+      { label: "Inventory", path: "/reports/inventory", icon: Package },
+      { label: "Customer Ledger", path: "/reports/customer-ledger", icon: Users },
+      { label: "Supplier Ledger", path: "/reports/supplier-ledger", icon: Warehouse }
+    ]
   }
 ];
 export {

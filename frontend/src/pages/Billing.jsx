@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FormField, Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
-import { TableActions } from "@/components/ui/action-menu";
+import { TABLE_ACTIONS_CELL_CLASS, TABLE_ACTIONS_HEAD_CLASS, TableActions } from "@/components/ui/action-menu";
 import {
   Table,
   TableBody,
@@ -17,11 +17,14 @@ import {
 import { EmptyState, TableFilters } from "@/components/ui/table-filters";
 import { useDemo } from "@/context/DemoContext";
 import { formatCurrency } from "@/lib/format";
+import { filterByDateRange } from "@/lib/dateFilter";
 import { getStatusDisplay } from "@/lib/status";
 import { useMemo, useState } from "react";
 function BillingPage() {
   const { state, getCustomerName, recordPayment } = useDemo();
   const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [paymentId, setPaymentId] = useState(null);
   const [paymentForm, setPaymentForm] = useState({
@@ -41,8 +44,9 @@ function BillingPage() {
     if (statusFilter !== "all") {
       list = list.filter((b) => b.paymentStatus === statusFilter);
     }
+    list = filterByDateRange(list, dateFrom, dateTo, "billingDate");
     return list;
-  }, [state.billingStatements, search, statusFilter, getCustomerName]);
+  }, [state.billingStatements, search, statusFilter, dateFrom, dateTo, getCustomerName]);
   const paymentBill = paymentId ? state.billingStatements.find((b) => b.id === paymentId) : null;
   const savePayment = () => {
     if (!paymentId || !paymentForm.amount) return;
@@ -68,7 +72,12 @@ function BillingPage() {
           { value: "unpaid", label: "Unpaid" },
           { value: "partially_paid", label: "Partially Paid" },
           { value: "paid", label: "Paid" }
-        ]
+        ],
+        showDateRange: true,
+        dateFrom,
+        dateTo,
+        onDateFromChange: setDateFrom,
+        onDateToChange: setDateTo
       }
     ),
     /* @__PURE__ */ jsxs(Table, { children: [
@@ -79,7 +88,7 @@ function BillingPage() {
         /* @__PURE__ */ jsx(TableHead, { children: "Billing Date" }),
         /* @__PURE__ */ jsx(TableHead, { children: "Amount" }),
         /* @__PURE__ */ jsx(TableHead, { children: "Payment Status" }),
-        /* @__PURE__ */ jsx(TableHead, { children: "Actions" })
+        /* @__PURE__ */ jsx(TableHead, { className: TABLE_ACTIONS_HEAD_CLASS, children: "Actions" })
       ] }) }),
       /* @__PURE__ */ jsx(TableBody, { children: filtered.length === 0 ? /* @__PURE__ */ jsx(TableRow, { className: "hover:bg-transparent", children: /* @__PURE__ */ jsx(TableCell, { colSpan: 7, children: /* @__PURE__ */ jsx(EmptyState, {}) }) }) : filtered.map((b) => {
         const st = getStatusDisplay(b.paymentStatus);
@@ -98,13 +107,10 @@ function BillingPage() {
             ] })
           ] }),
           /* @__PURE__ */ jsx(TableCell, { children: /* @__PURE__ */ jsx(Badge, { variant: st.variant, children: st.label }) }),
-          /* @__PURE__ */ jsx(TableCell, { children: /* @__PURE__ */ jsx(
+          /* @__PURE__ */ jsx(TableCell, { className: TABLE_ACTIONS_CELL_CLASS, children: /* @__PURE__ */ jsx(
             TableActions,
             {
-              menuItems: [
-                ...b.paymentStatus !== "paid" ? [{ label: "Record Payment", onClick: () => setPaymentId(b.id) }] : [],
-                { label: "Print", onClick: () => window.print() }
-              ]
+              onPrint: () => window.print()
             }
           ) })
         ] }, b.id);
