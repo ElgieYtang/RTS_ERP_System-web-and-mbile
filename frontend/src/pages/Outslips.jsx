@@ -5,7 +5,7 @@ import { TransactionWorkflow } from "@/components/workflow/TransactionWorkflow";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { TableActions } from "@/components/ui/action-menu";
+import { TABLE_ACTIONS_CELL_CLASS, TABLE_ACTIONS_HEAD_CLASS, TableActions } from "@/components/ui/action-menu";
 import { Modal } from "@/components/ui/modal";
 import {
   Table,
@@ -19,6 +19,7 @@ import {
 import { EmptyState, TableFilters } from "@/components/ui/table-filters";
 import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { useDemo } from "@/context/DemoContext";
+import { filterByDateRange } from "@/lib/dateFilter";
 import { getStatusDisplay } from "@/lib/status";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useMemo, useState } from "react";
@@ -35,7 +36,9 @@ function OutslipsPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [search, setSearch] = useState("");
-  const [statusTab, setStatusTab] = useState("pending");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [statusTab, setStatusTab] = useState("all");
   const [viewId, setViewId] = useState(null);
   const [dispatchId, setDispatchId] = useState(null);
   const counts = useMemo(() => ({
@@ -59,9 +62,10 @@ function OutslipsPage() {
         list = list.filter((o) => o.status === statusTab);
       }
     }
+    list = filterByDateRange(list, dateFrom, dateTo, "date");
     list.sort((a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status));
     return list;
-  }, [state.outslips, search, statusTab, getCustomerName]);
+  }, [state.outslips, search, statusTab, dateFrom, dateTo, getCustomerName]);
   const viewOs = viewId ? state.outslips.find((o) => o.id === viewId) : null;
   const openDetail = (id) => {
     if (isMobile) navigate(`/outslip/${id}`);
@@ -86,14 +90,14 @@ function OutslipsPage() {
         active: statusTab,
         onChange: setStatusTab,
         tabs: [
+          { key: "all", label: "All", count: counts.all },
           { key: "pending", label: "Pending", count: counts.pending },
           { key: "approved", label: "Approved", count: counts.approved },
-          { key: "for_dispatch", label: "For Dispatch", count: counts.for_dispatch },
-          { key: "all", label: "All", count: counts.all }
+          { key: "for_dispatch", label: "For Dispatch", count: counts.for_dispatch }
         ]
       }
     ),
-    /* @__PURE__ */ jsx(TableFilters, { search, onSearchChange: setSearch, searchPlaceholder: "Search outslips..." }),
+    /* @__PURE__ */ jsx(TableFilters, { search, onSearchChange: setSearch, searchPlaceholder: "Search outslips...", showDateRange: true, dateFrom, dateTo, onDateFromChange: setDateFrom, onDateToChange: setDateTo }),
     /* @__PURE__ */ jsx(
       ResponsiveTable,
       {
@@ -121,7 +125,7 @@ function OutslipsPage() {
             /* @__PURE__ */ jsx(TableHead, { children: "Date" }),
             /* @__PURE__ */ jsx(TableHead, { children: "Items" }),
             /* @__PURE__ */ jsx(TableHead, { children: "Status" }),
-            /* @__PURE__ */ jsx(TableHead, { children: "Actions" })
+            /* @__PURE__ */ jsx(TableHead, { className: TABLE_ACTIONS_HEAD_CLASS, children: "Actions" })
           ] }) }),
           /* @__PURE__ */ jsx(TableBody, { children: filtered.length === 0 ? /* @__PURE__ */ jsx(TableRow, { className: "hover:bg-transparent", children: /* @__PURE__ */ jsx(TableCell, { colSpan: 7, children: /* @__PURE__ */ jsx(EmptyState, {}) }) }) : filtered.map((o) => {
             const st = getStatusDisplay(o.status === "released" ? "for_dispatch" : o.status);
@@ -136,17 +140,10 @@ function OutslipsPage() {
                 " items"
               ] }),
               /* @__PURE__ */ jsx(TableCell, { children: /* @__PURE__ */ jsx(Badge, { variant: st.variant, children: st.label }) }),
-              /* @__PURE__ */ jsx(TableCell, { children: /* @__PURE__ */ jsx(
+              /* @__PURE__ */ jsx(TableCell, { className: TABLE_ACTIONS_CELL_CLASS, children: /* @__PURE__ */ jsx(
                 TableActions,
                 {
-                  onView: () => openDetail(o.id),
-                  menuItems: [
-                    { label: "Preview", onClick: () => window.print() },
-                    { label: "Print", onClick: () => window.print() },
-                    ...o.status === "pending" ? [{ label: "Approve", onClick: () => approveOutslip(o.id) }] : [],
-                    ...o.status === "approved" ? [{ label: "For Dispatch", onClick: () => setDispatchId(o.id) }] : [],
-                    ...o.status === "for_dispatch" || o.status === "released" ? [{ label: "Create Delivery Receipt", onClick: () => handleCreateDR(o.id) }] : []
-                  ]
+                  onPrint: () => window.print()
                 }
               ) })
             ] }, o.id);

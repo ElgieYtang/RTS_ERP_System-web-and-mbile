@@ -21,6 +21,8 @@ import { ReceivingPage } from "@/pages/Receiving";
 import { ReportsPage } from "@/pages/Reports";
 import { SettingsPage } from "@/pages/Settings";
 import { SOAPage } from "@/pages/SOA";
+import { CustomerLedgerPage } from "@/pages/reports/CustomerLedgerPage";
+import { SupplierLedgerPage } from "@/pages/reports/SupplierLedgerPage";
 import { AccomplishmentPreviewPage } from "@/pages/previews/AccomplishmentPreview";
 import { DeliveryReceiptPreviewPage } from "@/pages/previews/DeliveryReceiptPreview";
 import { PurchaseOrderPreviewPage } from "@/pages/previews/PurchaseOrderPreview";
@@ -75,6 +77,9 @@ function App() {
       /* @__PURE__ */ jsx(Route, { path: "reports/accomplishment", element: /* @__PURE__ */ jsx(AccomplishmentReportsPage, {}) }),
       /* @__PURE__ */ jsx(Route, { path: "reports/accomplishment/preview", element: /* @__PURE__ */ jsx(AccomplishmentPreviewPage, {}) }),
       /* @__PURE__ */ jsx(Route, { path: "reports/inventory", element: /* @__PURE__ */ jsx(InventoryReportsPage, {}) }),
+      /* @__PURE__ */ jsx(Route, { path: "reports/customer-ledger", element: /* @__PURE__ */ jsx(CustomerLedgerPage, {}) }),
+      /* @__PURE__ */ jsx(Route, { path: "reports/customer-ledger/soa/preview", element: /* @__PURE__ */ jsx(Navigate, { to: "/soa/preview", replace: true }) }),
+      /* @__PURE__ */ jsx(Route, { path: "reports/supplier-ledger", element: /* @__PURE__ */ jsx(SupplierLedgerPage, {}) }),
       /* @__PURE__ */ jsx(Route, { path: "inventory/reports", element: /* @__PURE__ */ jsx(ReportsPage, {}) }),
       /* @__PURE__ */ jsx(Route, { path: "purchase-orders", element: /* @__PURE__ */ jsx(Navigate, { to: "/purchase-order", replace: true }) }),
       /* @__PURE__ */ jsx(Route, { path: "purchase-orders/:id/preview", element: /* @__PURE__ */ jsx(Navigate, { to: "/purchase-order", replace: true }) }),

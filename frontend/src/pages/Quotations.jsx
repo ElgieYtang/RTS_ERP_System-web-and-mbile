@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormField, Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
-import { TableActions } from "@/components/ui/action-menu";
+import { TABLE_ACTIONS_CELL_CLASS, TABLE_ACTIONS_HEAD_CLASS, TableActions } from "@/components/ui/action-menu";
 import {
   Table,
   TableBody,
@@ -21,6 +21,7 @@ import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { QuotationWorkflow } from "@/components/workflow/quotationWorkflow";
 import { useDemo } from "@/context/DemoContext";
 import { formatCurrency } from "@/lib/format";
+import { filterByDateRange } from "@/lib/dateFilter";
 import { getStatusDisplay } from "@/lib/status";
 import { Plus } from "lucide-react";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -31,7 +32,9 @@ function QuotationsPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("pending");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [viewId, setViewId] = useState(null);
   const [editId, setEditId] = useState(null);
   const [cancelId, setCancelId] = useState(null);
@@ -47,10 +50,11 @@ function QuotationsPage() {
     if (statusFilter !== "all") {
       list = list.filter((qt) => qt.status === statusFilter);
     }
+    list = filterByDateRange(list, dateFrom, dateTo, "date");
     const order = ["pending", "approved", "rejected", "draft", "cancelled"];
     list.sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status));
     return list;
-  }, [state.quotations, search, statusFilter, getCustomerName]);
+  }, [state.quotations, search, statusFilter, dateFrom, dateTo, getCustomerName]);
   const viewQtn = viewId ? state.quotations.find((q) => q.id === viewId) : null;
   const editQtn = editId ? state.quotations.find((q) => q.id === editId) : null;
   const openDetail = (id) => {
@@ -93,10 +97,10 @@ function QuotationsPage() {
         active: statusFilter,
         onChange: setStatusFilter,
         tabs: [
+          { key: "all", label: "All", count: state.quotations.length },
           { key: "pending", label: "Pending", count: state.quotations.filter((q) => q.status === "pending").length },
           { key: "approved", label: "Approved", count: state.quotations.filter((q) => q.status === "approved").length },
-          { key: "rejected", label: "Rejected", count: state.quotations.filter((q) => q.status === "rejected").length },
-          { key: "all", label: "All", count: state.quotations.length }
+          { key: "rejected", label: "Rejected", count: state.quotations.filter((q) => q.status === "rejected").length }
         ]
       }
     ),
@@ -105,7 +109,12 @@ function QuotationsPage() {
       {
         search,
         onSearchChange: setSearch,
-        searchPlaceholder: "Search quotations..."
+        searchPlaceholder: "Search quotations...",
+        showDateRange: true,
+        dateFrom,
+        dateTo,
+        onDateFromChange: setDateFrom,
+        onDateToChange: setDateTo
       }
     ),
     /* @__PURE__ */ jsx(
@@ -133,7 +142,7 @@ function QuotationsPage() {
             /* @__PURE__ */ jsx(TableHead, { children: "Date" }),
             /* @__PURE__ */ jsx(TableHead, { children: "Amount" }),
             /* @__PURE__ */ jsx(TableHead, { children: "Status" }),
-            /* @__PURE__ */ jsx(TableHead, { children: "Actions" })
+            /* @__PURE__ */ jsx(TableHead, { className: TABLE_ACTIONS_HEAD_CLASS, children: "Actions" })
           ] }) }),
           /* @__PURE__ */ jsx(TableBody, { children: filtered.length === 0 ? /* @__PURE__ */ jsx(TableRow, { className: "hover:bg-transparent", children: /* @__PURE__ */ jsx(TableCell, { colSpan: 6, children: /* @__PURE__ */ jsx(EmptyState, {}) }) }) : filtered.map((q) => {
             const st = getStatusDisplay(q.status);
@@ -143,20 +152,15 @@ function QuotationsPage() {
               /* @__PURE__ */ jsx(TableCell, { children: q.date }),
               /* @__PURE__ */ jsx(TableCell, { children: formatCurrency(q.total) }),
               /* @__PURE__ */ jsx(TableCell, { children: /* @__PURE__ */ jsx(Badge, { variant: st.variant, children: st.label }) }),
-              /* @__PURE__ */ jsx(TableCell, { children: /* @__PURE__ */ jsx(
+              /* @__PURE__ */ jsx(TableCell, { className: TABLE_ACTIONS_CELL_CLASS, children: /* @__PURE__ */ jsx(
                 TableActions,
                 {
-                  onView: () => openDetail(q.id),
-                  menuItems: [
-                    { label: "Edit", onClick: () => openEdit(q) },
-                    { label: "Preview", onClick: () => navigate(`/quotations/${q.id}/preview`) },
-                    { label: "Print", onClick: () => {
-                      navigate(`/quotations/${q.id}/preview`);
-                      setTimeout(() => window.print(), 300);
-                    } },
-                    ...q.status === "approved" ? [{ label: "Convert to PO", onClick: () => handleConvertPO(q.id) }] : [],
-                    ...q.status !== "cancelled" ? [{ label: "Cancel", onClick: () => setCancelId(q.id), destructive: true }] : []
-                  ]
+                  onEdit: () => openEdit(q),
+                  onDelete: q.status !== "cancelled" ? () => setCancelId(q.id) : void 0,
+                  onPrint: () => {
+                    navigate(`/quotations/${q.id}/preview`);
+                    setTimeout(() => window.print(), 300);
+                  }
                 }
               ) })
             ] }, q.id);

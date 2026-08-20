@@ -71,13 +71,13 @@ function Sidebar({ mobileOpen = false, onMobileClose }) {
               }
             )
           ] }) }),
-          /* @__PURE__ */ jsx("nav", { className: "flex-1 overflow-y-auto px-3 pb-4", children: /* @__PURE__ */ jsx(NavSections, { onNavigate: onMobileClose }) })
+          /* @__PURE__ */ jsx("nav", { className: "sidebar-nav-scroll flex-1 overflow-y-auto px-3 pb-4", children: /* @__PURE__ */ jsx(NavSections, { onNavigate: onMobileClose }) })
         ]
       }
     ),
     /* @__PURE__ */ jsxs("aside", { className: "fixed left-0 top-0 z-40 hidden h-screen w-[250px] flex-col bg-maroon print:hidden md:flex", children: [
       /* @__PURE__ */ jsx("div", { className: "shrink-0 px-3 pt-4 pb-3", children: /* @__PURE__ */ jsx(Brand, {}) }),
-      /* @__PURE__ */ jsx("nav", { className: "flex-1 overflow-y-auto px-3 pb-4", children: /* @__PURE__ */ jsx(NavSections, {}) })
+      /* @__PURE__ */ jsx("nav", { className: "sidebar-nav-scroll flex-1 overflow-y-auto px-3 pb-4", children: /* @__PURE__ */ jsx(NavSections, {}) })
     ] })
   ] });
 }

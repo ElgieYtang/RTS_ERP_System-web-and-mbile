@@ -1,74 +1,71 @@
-import { jsx, jsxs } from "react/jsx-runtime";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { MoreHorizontal } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-function ActionMenu({ items, className }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  useEffect(() => {
-    const handler = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-  return /* @__PURE__ */ jsxs("div", { ref, className: cn("relative", className), children: [
-    /* @__PURE__ */ jsx(
-      Button,
-      {
-        variant: "ghost",
-        size: "sm",
-        onClick: () => setOpen(!open),
-        className: "px-2",
-        children: /* @__PURE__ */ jsx(MoreHorizontal, { className: "h-4 w-4" })
-      }
-    ),
-    open && /* @__PURE__ */ jsx("div", { className: "absolute right-0 top-full z-20 mt-1 min-w-[140px] rounded-md border border-border bg-surface py-1 shadow-lg", children: items.map((item) => /* @__PURE__ */ jsx(
-      "button",
-      {
-        type: "button",
-        onClick: () => {
-          item.onClick();
-          setOpen(false);
-        },
-        className: cn(
-          "block w-full px-3 py-2 text-left text-sm hover:bg-maroon-light",
-          item.destructive ? "text-[#DC2626]" : "text-text-primary"
-        ),
-        children: item.label
-      },
-      item.label
-    )) })
-  ] });
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+import { Pencil, Printer, Trash2 } from 'lucide-react'
+
+export const TABLE_ACTIONS_HEAD_CLASS = 'w-28 text-center'
+export const TABLE_ACTIONS_CELL_CLASS = 'text-center'
+
+const iconClass = 'block h-4 w-4 shrink-0'
+
+function IconActionButton({ onClick, label, children, destructive = false }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className={cn(
+        'table-action-btn inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg p-0 leading-none transition-colors',
+        destructive
+          ? 'text-error-text hover:bg-error-bg'
+          : 'text-text-secondary hover:bg-maroon-light hover:text-maroon',
+      )}
+    >
+      {children}
+    </button>
+  )
 }
-function TableActions({
-  onView,
-  menuItems
-}) {
-  return /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-1 no-print", children: [
-    onView && /* @__PURE__ */ jsx(Button, { variant: "ghost", size: "sm", onClick: onView, children: "View" }),
-    /* @__PURE__ */ jsx(ActionMenu, { items: menuItems })
-  ] });
+
+export function TableActions({ onEdit, onDelete, onPrint, className }) {
+  if (!onEdit && !onDelete && !onPrint) return null
+
+  return (
+    <div
+      className={cn(
+        'table-actions inline-flex items-center justify-center gap-1 no-print',
+        className,
+      )}
+      role="group"
+      aria-label="Row actions"
+    >
+      {onEdit && (
+        <IconActionButton onClick={onEdit} label="Edit">
+          <Pencil className={iconClass} strokeWidth={2} />
+        </IconActionButton>
+      )}
+      {onDelete && (
+        <IconActionButton onClick={onDelete} label="Delete" destructive>
+          <Trash2 className={iconClass} strokeWidth={2} />
+        </IconActionButton>
+      )}
+      {onPrint && (
+        <IconActionButton onClick={onPrint} label="Print">
+          <Printer className={iconClass} strokeWidth={2} />
+        </IconActionButton>
+      )}
+    </div>
+  )
 }
-function LoadingButton({
+
+export function LoadingButton({
   loading,
   children,
   onClick,
-  variant = "primary"
+  variant = 'primary',
 }) {
-  return /* @__PURE__ */ jsx(
-    Button,
-    {
-      variant,
-      onClick,
-      disabled: loading,
-      children: loading ? "Loading..." : children
-    }
-  );
+  return (
+    <Button variant={variant} onClick={onClick} disabled={loading}>
+      {loading ? 'Loading...' : children}
+    </Button>
+  )
 }
-export {
-  ActionMenu,
-  LoadingButton,
-  TableActions
-};

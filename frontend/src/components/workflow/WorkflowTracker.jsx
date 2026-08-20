@@ -1,7 +1,9 @@
-import { jsx, jsxs } from "react/jsx-runtime";
+import { jsx } from "react/jsx-runtime";
+import { SHOW_TRANSACTION_WORKFLOW } from "@/config/featureFlags";
 import { cn } from "@/lib/utils";
 import { Check } from "lucide-react";
 function WorkflowTracker({ stages, className }) {
+  if (!SHOW_TRANSACTION_WORKFLOW) return null;
   return /* @__PURE__ */ jsx("div", { className: cn("flex flex-col", className), children: stages.map((stage, index) => /* @__PURE__ */ jsxs("div", { className: "flex items-start gap-3", children: [
     /* @__PURE__ */ jsxs("div", { className: "flex flex-col items-center", children: [
       /* @__PURE__ */ jsx(

@@ -440,6 +440,24 @@ const initialDemoState = {
       description: "Payment"
     }
   ],
+  supplierPayments: [
+    {
+      id: "SPAY-00001",
+      supplierId: "sup-tech",
+      date: "August 19, 2026",
+      reference: "CHK-00001",
+      amount: 2e5,
+      description: "Partial payment for PO-00001"
+    },
+    {
+      id: "SPAY-00002",
+      supplierId: "sup-global",
+      date: "August 18, 2026",
+      reference: "CHK-00002",
+      amount: 74e3,
+      description: "Payment for PO-00002"
+    }
+  ],
   accomplishmentReports: [
     {
       id: "AR-00001",

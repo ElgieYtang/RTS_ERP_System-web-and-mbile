@@ -18,7 +18,8 @@ const statusMap = {
   "In Stock": { variant: "approved", label: "In Stock" },
   "Low Stock": { variant: "pending", label: "Low Stock" },
   "Out of Stock": { variant: "rejected", label: "Out of Stock" },
-  Active: { variant: "approved", label: "Active" }
+  Active: { variant: "approved", label: "Active" },
+  Inactive: { variant: "rejected", label: "Inactive" },
 };
 function getStatusDisplay(status) {
   return statusMap[status] ?? { variant: "default", label: status };

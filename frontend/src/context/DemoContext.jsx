@@ -1,6 +1,7 @@
 import { jsx } from "react/jsx-runtime";
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { initialDemoState } from "@/data/initialData";
+import { createSetupMutations } from "@/context/setupMutations";
 const DemoContext = createContext(null);
 function updateProductStock(products, productId, delta) {
   return products.map((p) => {
@@ -251,6 +252,7 @@ function DemoProvider({ children }) {
     setState((prev) => ({ ...prev, workflowStage: "soa" }));
     showToast("success", "SOA generated successfully.");
   }, [showToast]);
+  const setupMutations = useMemo(() => createSetupMutations(setState), []);
   const value = useMemo(
     () => ({
       state,
@@ -270,6 +272,7 @@ function DemoProvider({ children }) {
       markDeliveryDelivered,
       recordPayment,
       generateSOA,
+      ...setupMutations,
       toasts,
       showToast,
       removeToast
@@ -292,6 +295,7 @@ function DemoProvider({ children }) {
       markDeliveryDelivered,
       recordPayment,
       generateSOA,
+      setupMutations,
       toasts,
       showToast,
       removeToast
