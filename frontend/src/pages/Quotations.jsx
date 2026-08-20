@@ -1,4 +1,5 @@
 import { jsx, jsxs } from "react/jsx-runtime";
+import { AddQuotationModal } from "@/components/quotations/AddQuotationModal";
 import { StatusTabs } from "@/components/layout/Breadcrumbs";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +39,7 @@ function QuotationsPage() {
   const [viewId, setViewId] = useState(null);
   const [editId, setEditId] = useState(null);
   const [cancelId, setCancelId] = useState(null);
+  const [addOpen, setAddOpen] = useState(false);
   const [editForm, setEditForm] = useState({});
   const filtered = useMemo(() => {
     let list = state.quotations;
@@ -85,7 +87,7 @@ function QuotationsPage() {
         title: "Quotations",
         description: "Manage and track customer quotations.",
         breadcrumbs: ["Transaction", "Quotations"],
-        action: /* @__PURE__ */ jsxs(Button, { children: [
+        action: /* @__PURE__ */ jsxs(Button, { onClick: () => setAddOpen(true), children: [
           /* @__PURE__ */ jsx(Plus, { className: "h-4 w-4" }),
           "New Quotation"
         ] })
@@ -257,6 +259,7 @@ function QuotationsPage() {
         /* @__PURE__ */ jsx(Button, { variant: "secondary", onClick: () => setEditId(null), children: "Cancel" })
       ] })
     ] }) }),
+    /* @__PURE__ */ jsx(AddQuotationModal, { open: addOpen, onClose: () => setAddOpen(false) }),
     /* @__PURE__ */ jsx(
       ConfirmDialog,
       {
