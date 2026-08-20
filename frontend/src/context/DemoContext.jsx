@@ -54,6 +54,38 @@ function DemoProvider({ children }) {
       )
     }));
   }, []);
+  const addQuotation = useCallback((data) => {
+    setState((prev) => {
+      const maxNum = prev.quotations.reduce((max, quotation) => {
+        const match = quotation.id.match(/QTN-(\d+)/);
+        const num = match ? Number(match[1]) : 0;
+        return Math.max(max, num);
+      }, 0);
+      const id = `QTN-${String(maxNum + 1).padStart(5, "0")}`;
+      const items = data.items ?? [];
+      const total = items.reduce(
+        (sum, item) => sum + Number(item.quantity) * Number(item.unitPrice),
+        0
+      );
+      const quotation = {
+        id,
+        customerId: data.customerId,
+        date: data.date ?? "August 19, 2026",
+        validUntil: data.validUntil ?? "",
+        subject: data.subject ?? "",
+        items,
+        total,
+        status: "pending",
+        terms: data.terms ?? "",
+        preparedBy: "Admin User"
+      };
+      return {
+        ...prev,
+        quotations: [...prev.quotations, quotation]
+      };
+    });
+    showToast("success", "Quotation created successfully.");
+  }, [showToast]);
   const convertQuotationToPO = useCallback((quotationId) => {
     const qtn = state.quotations.find((q) => q.id === quotationId);
     if (!qtn || qtn.status !== "approved") return null;
@@ -260,6 +292,7 @@ function DemoProvider({ children }) {
       getSupplierName,
       getProduct,
       updateQuotation,
+      addQuotation,
       cancelQuotation,
       convertQuotationToPO,
       updatePurchaseOrder,
@@ -283,6 +316,7 @@ function DemoProvider({ children }) {
       getSupplierName,
       getProduct,
       updateQuotation,
+      addQuotation,
       cancelQuotation,
       convertQuotationToPO,
       updatePurchaseOrder,

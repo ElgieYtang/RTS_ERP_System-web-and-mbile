@@ -16,35 +16,51 @@ const initialDemoState = {
   customers: [
     {
       id: "cust-abc",
+      code: "CUS-001",
       name: "ABC Corporation",
       contactPerson: "Juan Dela Cruz",
       phone: "0917-123-4567",
       email: "juan@abccorporation.example",
-      address: "Cebu City, Cebu"
+      address: "Cebu City, Cebu",
+      tinNo: "123-456-789-000",
+      terms: "30",
+      termsType: "Days"
     },
     {
       id: "cust-cbs",
+      code: "CUS-002",
       name: "Cebu Business Solutions",
       contactPerson: "Maria Santos",
       phone: "0918-234-5678",
       email: "maria@cebusolutions.example",
-      address: "Cebu City, Cebu"
+      address: "Cebu City, Cebu",
+      tinNo: "234-567-890-000",
+      terms: "15",
+      termsType: "Days"
     },
     {
       id: "cust-pacific",
+      code: "CUS-003",
       name: "Pacific Office Supplies",
       contactPerson: "Carlo Reyes",
       phone: "0919-345-6789",
       email: "carlo@pacificoffice.example",
-      address: "Mandaue City, Cebu"
+      address: "Mandaue City, Cebu",
+      tinNo: "345-678-901-000",
+      terms: "30",
+      termsType: "Days"
     },
     {
       id: "cust-metro",
+      code: "CUS-004",
       name: "MetroTech Solutions",
       contactPerson: "Angela Garcia",
       phone: "0920-456-7890",
       email: "angela@metrotech.example",
-      address: "Lapu-Lapu City, Cebu"
+      address: "Lapu-Lapu City, Cebu",
+      tinNo: "456-789-012-000",
+      terms: "45",
+      termsType: "Days"
     }
   ],
   suppliers: [
