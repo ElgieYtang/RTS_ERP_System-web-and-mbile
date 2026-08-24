@@ -1,155 +1,192 @@
-import { jsx, jsxs } from "react/jsx-runtime";
-import logo from "@/assets/logo.png";
-import {
-  companyInfo
-} from "@/data/accomplishmentReports";
-import { groupImagesIntoPages } from "@/lib/reportPages";
-function AccomplishmentReport({
+import logo from '@/assets/logo.png'
+import { RTS_LETTERHEAD } from '@/config/companyLetterhead'
+import { companyInfo } from '@/data/accomplishmentReports'
+import { groupImagesIntoPages, padImageSlots } from '@/lib/reportPages'
+import { X } from 'lucide-react'
+
+const DEFAULT_COMPANY = {
+  name: companyInfo.name,
+  address: 'RM301E-3 MEDALLE BLDG. FUENTE OSMEÑA CAPITOL SITE CEBU CITY',
+  phone: '345-2283/09175734911',
+}
+
+export function AccomplishmentReport({
   report,
-  company = companyInfo
+  company = DEFAULT_COMPANY,
+  signatoryName = RTS_LETTERHEAD.signatoryName,
+  previewPage,
+  onRemoveImage,
 }) {
-  const pages = groupImagesIntoPages(report.images);
-  const totalPages = pages.length;
-  return /* @__PURE__ */ jsx("div", { className: "report-document", children: pages.map((pageImages, pageIndex) => {
-    const pageNumber = pageIndex + 1;
-    const isFirstPage = pageIndex === 0;
-    const isLastPage = pageNumber === totalPages;
-    return /* @__PURE__ */ jsxs(
-      "section",
-      {
-        className: "report-page",
-        "aria-label": `Accomplishment Report page ${pageNumber} of ${totalPages}`,
-        children: [
-          isFirstPage ? /* @__PURE__ */ jsx(
-            ReportLetterhead,
-            {
-              company,
-              pageNumber,
-              totalPages
+  const pages = groupImagesIntoPages(report.images)
+  const totalPages = pages.length
+  const isPaginatedPreview = previewPage != null
+
+  return (
+    <div className={isPaginatedPreview ? 'ar-print ar-print--paginated' : 'ar-print'}>
+      {pages.map((pageImages, pageIndex) => {
+        const pageNumber = pageIndex + 1
+        const isFirstPage = pageIndex === 0
+        const isLastPage = pageNumber === totalPages
+        const slots = padImageSlots(pageImages, 4)
+        const isHiddenInPreview = isPaginatedPreview && pageNumber !== previewPage
+
+        return (
+          <section
+            key={`${report.id}-page-${pageNumber}`}
+            className={
+              isHiddenInPreview
+                ? 'ar-print__page ar-print__page--hidden-preview'
+                : 'ar-print__page'
             }
-          ) : /* @__PURE__ */ jsxs("div", { className: "report-continued", children: [
-            /* @__PURE__ */ jsx("h1", { className: "report-title", children: "ACCOMPLISHMENT REPORT" }),
-            /* @__PURE__ */ jsxs("div", { className: "report-page-label", children: [
-              "Page ",
-              pageNumber,
-              " of ",
-              totalPages
-            ] })
-          ] }),
-          isFirstPage ? /* @__PURE__ */ jsx(ReportInfoTable, { report }) : null,
-          /* @__PURE__ */ jsx(PicturesSection, { images: pageImages, attached: isFirstPage }),
-          isLastPage ? /* @__PURE__ */ jsx(SignatureSection, { report }) : null
-        ]
-      },
-      `${report.id}-page-${pageNumber}`
-    );
-  }) });
-}
-function ReportLetterhead({
-  company,
-  pageNumber,
-  totalPages
-}) {
-  return /* @__PURE__ */ jsxs("header", { className: "report-letterhead", children: [
-    /* @__PURE__ */ jsxs("div", { className: "report-letterhead-row", children: [
-      /* @__PURE__ */ jsx(
-        "img",
-        {
-          src: logo,
-          alt: `${company.name} logo`,
-          className: "report-logo",
-          width: 72,
-          height: 72
-        }
-      ),
-      /* @__PURE__ */ jsxs("div", { className: "report-company", children: [
-        /* @__PURE__ */ jsx("div", { className: "report-company-name", children: company.name }),
-        company.addressLines.map((line) => /* @__PURE__ */ jsx("div", { className: "report-company-meta", children: line }, line)),
-        /* @__PURE__ */ jsxs("div", { className: "report-company-meta", children: [
-          "Tel: ",
-          company.phone
-        ] }),
-        /* @__PURE__ */ jsxs("div", { className: "report-company-meta", children: [
-          "Email: ",
-          company.email
-        ] })
-      ] })
-    ] }),
-    /* @__PURE__ */ jsx("h1", { className: "report-title", children: "ACCOMPLISHMENT REPORT" }),
-    /* @__PURE__ */ jsxs("div", { className: "report-page-label", children: [
-      "Page ",
-      pageNumber,
-      " of ",
-      totalPages
-    ] })
-  ] });
-}
-function ReportInfoTable({ report }) {
-  return /* @__PURE__ */ jsx("table", { className: "report-info-table", children: /* @__PURE__ */ jsxs("tbody", { children: [
-    /* @__PURE__ */ jsxs("tr", { children: [
-      /* @__PURE__ */ jsx("th", { children: "Project Name" }),
-      /* @__PURE__ */ jsx("td", { children: report.projectName }),
-      /* @__PURE__ */ jsx("th", { children: "Date" }),
-      /* @__PURE__ */ jsx("td", { children: report.date })
-    ] }),
-    /* @__PURE__ */ jsxs("tr", { children: [
-      /* @__PURE__ */ jsx("th", { children: "Location" }),
-      /* @__PURE__ */ jsx("td", { children: report.location }),
-      /* @__PURE__ */ jsx("th", { children: "Remarks" }),
-      /* @__PURE__ */ jsx("td", { rowSpan: 2, children: report.remarks })
-    ] }),
-    /* @__PURE__ */ jsxs("tr", { children: [
-      /* @__PURE__ */ jsx("th", { children: "Installation Report No." }),
-      /* @__PURE__ */ jsx("td", { children: report.installationReportNo })
-    ] })
-  ] }) });
-}
-function PicturesSection({
-  images,
-  attached
-}) {
-  const rowCount = images.length > 2 ? 2 : 1;
-  return /* @__PURE__ */ jsxs(
-    "div",
-    {
-      className: attached ? "report-pictures" : "report-pictures report-pictures-standalone",
-      children: [
-        /* @__PURE__ */ jsx("div", { className: "report-pictures-label", children: "Pictures" }),
-        /* @__PURE__ */ jsx(
-          "div",
-          {
-            className: "report-image-grid image-grid",
-            style: { gridTemplateRows: `repeat(${rowCount}, 1fr)` },
-            children: images.map((image, index) => /* @__PURE__ */ jsx(
-              "div",
-              {
-                className: "report-image-cell image-cell",
-                children: /* @__PURE__ */ jsx("img", { src: image.src, alt: image.alt, draggable: false })
-              },
-              image.id ?? `image-${index}`
-            ))
-          }
+            aria-label={`Accomplishment Report page ${pageNumber} of ${totalPages}`}
+            aria-hidden={isHiddenInPreview}
+          >
+            {isFirstPage ? (
+              <ReportLetterhead company={company} />
+            ) : (
+              <div className="ar-print__continued">
+                <h1 className="ar-print__title">ACCOMPLISHMENT REPORT</h1>
+                <p className="ar-print__page-no">
+                  Page {pageNumber} of {totalPages}
+                </p>
+              </div>
+            )}
+
+            {isFirstPage ? <ReportInfoTable report={report} /> : null}
+
+            <PicturesSection
+              images={slots}
+              attached={isFirstPage}
+              onRemoveImage={onRemoveImage}
+            />
+
+            {isLastPage ? (
+              <SignatureSection
+                preparedBy={report.preparedBy}
+                preparedByPosition={report.preparedByPosition ?? 'PERSONNEL'}
+                signatoryName={signatoryName}
+                confirmedByLabel={
+                  report.confirmedByLabel ?? 'SIGNATURE OF PRINTED NAME/POSITION'
+                }
+              />
+            ) : null}
+          </section>
         )
-      ]
-    }
-  );
+      })}
+    </div>
+  )
 }
-function SignatureSection({ report }) {
-  return /* @__PURE__ */ jsxs("div", { className: "report-signatures", children: [
-    /* @__PURE__ */ jsxs("div", { className: "report-signature-col", children: [
-      /* @__PURE__ */ jsx("div", { className: "report-signature-heading", children: "Prepared By:" }),
-      /* @__PURE__ */ jsx("div", { className: "report-signature-line" }),
-      /* @__PURE__ */ jsx("div", { className: "report-signature-name", children: report.preparedBy }),
-      /* @__PURE__ */ jsx("div", { className: "report-signature-role", children: "Name of Personnel" })
-    ] }),
-    /* @__PURE__ */ jsxs("div", { className: "report-signature-col", children: [
-      /* @__PURE__ */ jsx("div", { className: "report-signature-heading", children: "Confirmed By:" }),
-      /* @__PURE__ */ jsx("div", { className: "report-signature-line" }),
-      /* @__PURE__ */ jsx("div", { className: "report-signature-name", children: "Signature of Printed" }),
-      /* @__PURE__ */ jsx("div", { className: "report-signature-role", children: "Name / Position" })
-    ] })
-  ] });
+
+function ReportLetterhead({ company }) {
+  return (
+    <header className="ar-print__letterhead">
+      <div className="ar-print__letterhead-row">
+        <img
+          src={logo}
+          alt={`${company.name} logo`}
+          className="ar-print__logo"
+          width={72}
+          height={72}
+        />
+        <div className="ar-print__company">
+          <p className="ar-print__company-name">{company.name}</p>
+          <p className="ar-print__company-line">{company.address}</p>
+          <p className="ar-print__company-line">{company.phone}</p>
+        </div>
+      </div>
+      <h1 className="ar-print__title">ACCOMPLISHMENT REPORT</h1>
+    </header>
+  )
 }
-export {
-  AccomplishmentReport
-};
+
+function ReportInfoTable({ report }) {
+  return (
+    <table className="ar-print__info-table">
+      <tbody>
+        <tr>
+          <th>Project Name:</th>
+          <td colSpan={3}>{report.projectName}</td>
+        </tr>
+        <tr>
+          <th>Location</th>
+          <td>{report.location}</td>
+          <th>Remarks</th>
+          <td>{report.remarks}</td>
+        </tr>
+        <tr>
+          <th>Installation Report No:</th>
+          <td>{report.installationReportNo}</td>
+          <th>Date:</th>
+          <td>{report.date}</td>
+        </tr>
+      </tbody>
+    </table>
+  )
+}
+
+function PicturesSection({ images, attached, onRemoveImage }) {
+  return (
+    <div
+      className={
+        attached ? 'ar-print__pictures' : 'ar-print__pictures ar-print__pictures--standalone'
+      }
+    >
+      <div className="ar-print__pictures-label">Pictures</div>
+      <div className="ar-print__image-grid">
+        {images.map((image, index) => (
+          <div key={image?.id ?? `empty-${index}`} className="ar-print__image-cell">
+            {image ? (
+              <>
+                <img src={image.src} alt={image.alt} draggable={false} />
+                {onRemoveImage ? (
+                  <button
+                    type="button"
+                    className="ar-print__image-remove no-print"
+                    onClick={() => onRemoveImage(image.id)}
+                    aria-label={`Remove ${image.alt}`}
+                    title="Remove photo"
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                ) : null}
+              </>
+            ) : (
+              <span className="ar-print__image-empty" aria-hidden="true" />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function SignatureSection({
+  preparedBy,
+  preparedByPosition,
+  signatoryName,
+  confirmedByLabel,
+}) {
+  return (
+    <table className="ar-print__signatures">
+      <tbody>
+        <tr>
+          <th>Prepared By:</th>
+          <th>Confirmed By:</th>
+        </tr>
+        <tr>
+          <td>
+            <div className="ar-print__signature-space" />
+            <p className="ar-print__signature-name">{signatoryName || preparedBy}</p>
+            <p className="ar-print__signature-role">{preparedByPosition}</p>
+          </td>
+          <td>
+            <div className="ar-print__signature-space" />
+            <p className="ar-print__signature-role ar-print__signature-role--center">
+              {confirmedByLabel}
+            </p>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  )
+}

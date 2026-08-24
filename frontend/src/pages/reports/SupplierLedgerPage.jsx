@@ -1,7 +1,7 @@
-import { PageHeader } from "@/components/layout/PageHeader";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { DateRangeFilter } from "@/components/ui/table-filters";
+import { PageHeader } from '@/components/layout/PageHeader'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { DateRangeFilter } from '@/components/ui/table-filters'
 import {
   Table,
   TableBody,
@@ -9,31 +9,53 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { useDemo } from "@/context/DemoContext";
-import { isWithinDateRange } from "@/lib/dateFilter";
-import { formatCurrency } from "@/lib/format";
-import { buildSupplierLedgerRows, ledgerTotals } from "@/lib/ledgerUtils";
-import { Printer } from "lucide-react";
-import { useMemo, useState } from "react";
+} from '@/components/ui/table'
+import { useDemo } from '@/context/DemoContext'
+import { useSetupResource } from '@/hooks/useSetupResource'
+import { formatCurrency } from '@/lib/format'
+import { fetchSupplierLedger } from '@/lib/reportsApi'
+import { Printer } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
 
 export function SupplierLedgerPage() {
-  const { state } = useDemo();
-  const [supplierId, setSupplierId] = useState(state.suppliers[0]?.id ?? "");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const { showToast } = useDemo()
+  const { rows: suppliers, loading: suppliersLoading } = useSetupResource('suppliers')
+  const [supplierId, setSupplierId] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [account, setAccount] = useState(null)
+  const [loading, setLoading] = useState(false)
 
-  const supplier = state.suppliers.find((s) => s.id === supplierId);
-  const purchaseOrders = state.purchaseOrders.filter((po) => po.supplierId === supplierId);
-  const payments = (state.supplierPayments ?? []).filter((p) => p.supplierId === supplierId);
+  useEffect(() => {
+    if (!supplierId && suppliers[0]?.id) {
+      setSupplierId(String(suppliers[0].id))
+    }
+  }, [suppliers, supplierId])
 
-  const transactions = useMemo(() => {
-    const rows = buildSupplierLedgerRows(purchaseOrders, payments);
-    if (!dateFrom && !dateTo) return rows;
-    return rows.filter((row) => isWithinDateRange(row.date, dateFrom, dateTo));
-  }, [purchaseOrders, payments, dateFrom, dateTo]);
+  const loadLedger = useCallback(async () => {
+    if (!supplierId) return
+    setLoading(true)
+    try {
+      const data = await fetchSupplierLedger({
+        supplierId,
+        from: dateFrom || undefined,
+        to: dateTo || undefined,
+      })
+      setAccount(data)
+    } catch (caught) {
+      showToast('error', caught?.message ?? 'Could not load supplier ledger.')
+      setAccount(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [supplierId, dateFrom, dateTo, showToast])
 
-  const { totalDebit, totalCredit, outstanding } = ledgerTotals(transactions);
+  useEffect(() => {
+    if (supplierId) loadLedger()
+  }, [supplierId, loadLedger])
+
+  const totals = account?.totals ?? { totalDebit: 0, totalCredit: 0, outstanding: 0 }
+  const rows = account?.rows ?? []
 
   return (
     <div>
@@ -55,8 +77,10 @@ export function SupplierLedgerPage() {
             value={supplierId}
             onChange={(e) => setSupplierId(e.target.value)}
             className="h-9 min-w-[220px] rounded-md border border-border-input bg-surface px-3 text-sm"
+            disabled={suppliersLoading}
           >
-            {state.suppliers.map((s) => (
+            <option value="">Select supplier…</option>
+            {suppliers.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
@@ -74,9 +98,11 @@ export function SupplierLedgerPage() {
       <Card className="mb-6">
         <CardContent className="pt-4">
           <p className="text-sm text-text-secondary">Payables and payments for</p>
-          <p className="mt-1 font-semibold">{supplier?.name}</p>
+          <p className="mt-1 font-semibold">{account?.supplierName ?? '—'}</p>
         </CardContent>
       </Card>
+
+      {loading ? <p className="mb-4 text-sm text-text-secondary">Loading ledger…</p> : null}
 
       <Table>
         <TableHeader>
@@ -90,16 +116,24 @@ export function SupplierLedgerPage() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {transactions.map((row, index) => (
-            <TableRow key={`${row.ref}-${index}`}>
-              <TableCell>{row.date}</TableCell>
-              <TableCell>{row.ref}</TableCell>
-              <TableCell>{row.description}</TableCell>
-              <TableCell>{row.debit ? formatCurrency(row.debit) : "—"}</TableCell>
-              <TableCell>{row.credit ? formatCurrency(row.credit) : "—"}</TableCell>
-              <TableCell>{formatCurrency(row.balance)}</TableCell>
+          {rows.length === 0 ? (
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={6} className="text-text-secondary">
+                No ledger activity for this supplier.
+              </TableCell>
             </TableRow>
-          ))}
+          ) : (
+            rows.map((row, index) => (
+              <TableRow key={`${row.ref}-${index}`}>
+                <TableCell>{row.date}</TableCell>
+                <TableCell>{row.ref}</TableCell>
+                <TableCell>{row.description}</TableCell>
+                <TableCell>{row.debit ? formatCurrency(row.debit) : '—'}</TableCell>
+                <TableCell>{row.credit ? formatCurrency(row.credit) : '—'}</TableCell>
+                <TableCell>{formatCurrency(row.balance)}</TableCell>
+              </TableRow>
+            ))
+          )}
         </TableBody>
       </Table>
 
@@ -107,22 +141,24 @@ export function SupplierLedgerPage() {
         <Card>
           <CardContent className="pt-4">
             <p className="text-sm text-text-secondary">Total Payables</p>
-            <p className="text-xl font-semibold">{formatCurrency(totalDebit)}</p>
+            <p className="text-xl font-semibold">{formatCurrency(totals.totalDebit)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4">
             <p className="text-sm text-text-secondary">Total Payments</p>
-            <p className="text-xl font-semibold">{formatCurrency(totalCredit)}</p>
+            <p className="text-xl font-semibold">{formatCurrency(totals.totalCredit)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4">
             <p className="text-sm text-text-secondary">Outstanding Balance</p>
-            <p className="text-xl font-semibold text-maroon">{formatCurrency(outstanding)}</p>
+            <p className="text-xl font-semibold text-maroon">
+              {formatCurrency(totals.outstanding)}
+            </p>
           </CardContent>
         </Card>
       </div>
     </div>
-  );
+  )
 }

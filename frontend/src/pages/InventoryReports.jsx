@@ -1,155 +1,191 @@
-import { jsx, jsxs } from "react/jsx-runtime";
-import { PageHeader } from "@/components/layout/PageHeader";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { PageHeader } from '@/components/layout/PageHeader'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import {
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
-  TableLink,
-  TableRow
-} from "@/components/ui/table";
-import { WorkflowTracker } from "@/components/workflow/WorkflowTracker";
-import { workflowStages } from "@/config/workflow";
-import { getStockLevels, useErp } from "@/data/erpStore";
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-function InventoryReportsPage() {
-  const { movements, outslips, createDeliveryReceiptFromOutslip } = useErp();
-  const navigate = useNavigate();
-  const [query, setQuery] = useState("");
-  const [message, setMessage] = useState(null);
-  const stock = getStockLevels(movements);
-  const totalQuantity = stock.reduce((sum, row) => sum + row.quantity, 0);
-  const records = useMemo(() => {
-    const text = query.trim().toLowerCase();
-    return movements.filter((row) => {
-      if (!text) return true;
-      return [
-        row.item,
-        row.itemCode,
-        row.project,
-        row.customer,
-        row.poId,
-        row.outslipId,
-        row.warehouse
-      ].join(" ").toLowerCase().includes(text);
-    });
-  }, [movements, query]);
-  function handleCreateDeliveryReceipt(outslipId) {
-    if (outslipId === "\u2014") return;
-    const result = createDeliveryReceiptFromOutslip(outslipId);
-    if (result.error) {
-      setMessage(result.error);
-      return;
+  TableRow,
+} from '@/components/ui/table'
+import { useDemo } from '@/context/DemoContext'
+import { fetchInventoryReport } from '@/lib/reportsApi'
+import { getStatusDisplay } from '@/lib/status'
+import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+
+export function InventoryReportsPage() {
+  const { showToast } = useDemo()
+  const navigate = useNavigate()
+  const [query, setQuery] = useState('')
+  const [report, setReport] = useState(null)
+  const [loading, setLoading] = useState(false)
+
+  const loadReport = useCallback(async (q = '') => {
+    setLoading(true)
+    try {
+      const data = await fetchInventoryReport({ q: q || undefined })
+      setReport(data)
+    } catch (caught) {
+      showToast('error', caught?.message ?? 'Could not load inventory report.')
+      setReport(null)
+    } finally {
+      setLoading(false)
     }
-    navigate(`/delivery-receipts?id=${result.receipt?.id}`);
+  }, [showToast])
+
+  useEffect(() => {
+    loadReport('')
+  }, [loadReport])
+
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      loadReport(query.trim())
+    }, 300)
+    return () => clearTimeout(handle)
+  }, [query, loadReport])
+
+  const summary = report?.summary ?? {
+    itemCount: 0,
+    totalQuantity: 0,
+    movementCount: 0,
   }
-  return /* @__PURE__ */ jsxs("div", { children: [
-    /* @__PURE__ */ jsx(
-      PageHeader,
-      {
-        title: "Inventory & Reports",
-        description: "Current stock and inventory records from released outslips, on one page."
-      }
-    ),
-    /* @__PURE__ */ jsxs("div", { className: "mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3", children: [
-      /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(CardContent, { className: "pt-4", children: [
-        /* @__PURE__ */ jsx("p", { className: "text-sm text-text-secondary", children: "Items" }),
-        /* @__PURE__ */ jsx("p", { className: "mt-2 text-3xl font-semibold text-text-primary", children: stock.length })
-      ] }) }),
-      /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(CardContent, { className: "pt-4", children: [
-        /* @__PURE__ */ jsx("p", { className: "text-sm text-text-secondary", children: "Total quantity on hand" }),
-        /* @__PURE__ */ jsx("p", { className: "mt-2 text-3xl font-semibold text-text-primary", children: totalQuantity })
-      ] }) }),
-      /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(CardContent, { className: "pt-4", children: [
-        /* @__PURE__ */ jsx("p", { className: "text-sm text-text-secondary", children: "Inventory records" }),
-        /* @__PURE__ */ jsx("p", { className: "mt-2 text-3xl font-semibold text-text-primary", children: movements.length })
-      ] }) })
-    ] }),
-    /* @__PURE__ */ jsxs("div", { className: "mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3", children: [
-      /* @__PURE__ */ jsxs("div", { className: "lg:col-span-2", children: [
-        /* @__PURE__ */ jsx("h2", { className: "mb-3 text-base font-semibold text-text-primary", children: "Current stock" }),
-        /* @__PURE__ */ jsxs(Table, { children: [
-          /* @__PURE__ */ jsx(TableHeader, { children: /* @__PURE__ */ jsxs(TableRow, { className: "hover:bg-transparent", children: [
-            /* @__PURE__ */ jsx(TableHead, { children: "Item Code" }),
-            /* @__PURE__ */ jsx(TableHead, { children: "Item" }),
-            /* @__PURE__ */ jsx(TableHead, { children: "Quantity" }),
-            /* @__PURE__ */ jsx(TableHead, { children: "Unit" })
-          ] }) }),
-          /* @__PURE__ */ jsx(TableBody, { children: stock.map((row) => /* @__PURE__ */ jsxs(TableRow, { children: [
-            /* @__PURE__ */ jsx(TableCell, { children: row.itemCode }),
-            /* @__PURE__ */ jsx(TableCell, { children: row.item }),
-            /* @__PURE__ */ jsx(TableCell, { children: row.quantity }),
-            /* @__PURE__ */ jsx(TableCell, { children: row.unit })
-          ] }, row.itemCode)) })
-        ] })
-      ] }),
-      /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(CardContent, { className: "pt-4", children: [
-        /* @__PURE__ */ jsx("h2", { className: "mb-3 text-base font-semibold text-text-primary", children: "Workflow" }),
-        /* @__PURE__ */ jsx(WorkflowTracker, { stages: workflowStages("Inventory & Reports") })
-      ] }) })
-    ] }),
-    /* @__PURE__ */ jsxs("div", { className: "mb-3 flex flex-wrap items-center justify-between gap-3", children: [
-      /* @__PURE__ */ jsx("h2", { className: "text-base font-semibold text-text-primary", children: "Inventory records" }),
-      /* @__PURE__ */ jsx(
-        Input,
-        {
-          value: query,
-          onChange: (event) => setQuery(event.target.value),
-          placeholder: "Search item, PO, outslip, project\u2026",
-          className: "max-w-sm"
-        }
-      )
-    ] }),
-    /* @__PURE__ */ jsxs(Table, { children: [
-      /* @__PURE__ */ jsx(TableHeader, { children: /* @__PURE__ */ jsxs(TableRow, { className: "hover:bg-transparent", children: [
-        /* @__PURE__ */ jsx(TableHead, { children: "Date" }),
-        /* @__PURE__ */ jsx(TableHead, { children: "Item" }),
-        /* @__PURE__ */ jsx(TableHead, { children: "Qty" }),
-        /* @__PURE__ */ jsx(TableHead, { children: "Warehouse" }),
-        /* @__PURE__ */ jsx(TableHead, { children: "Project" }),
-        /* @__PURE__ */ jsx(TableHead, { children: "Customer" }),
-        /* @__PURE__ */ jsx(TableHead, { children: "PO" }),
-        /* @__PURE__ */ jsx(TableHead, { children: "Outslip" }),
-        /* @__PURE__ */ jsx(TableHead, {})
-      ] }) }),
-      /* @__PURE__ */ jsx(TableBody, { children: records.map((row) => {
-        const outslip = outslips.find((item) => item.id === row.outslipId);
-        return /* @__PURE__ */ jsxs(TableRow, { children: [
-          /* @__PURE__ */ jsx(TableCell, { children: row.date }),
-          /* @__PURE__ */ jsxs(TableCell, { children: [
-            row.item,
-            /* @__PURE__ */ jsx("div", { className: "text-xs text-text-secondary", children: row.itemCode })
-          ] }),
-          /* @__PURE__ */ jsxs(TableCell, { children: [
-            row.quantity,
-            " ",
-            row.unit
-          ] }),
-          /* @__PURE__ */ jsx(TableCell, { children: row.warehouse }),
-          /* @__PURE__ */ jsx(TableCell, { children: row.project }),
-          /* @__PURE__ */ jsx(TableCell, { children: row.customer }),
-          /* @__PURE__ */ jsx(TableCell, { children: row.poId !== "\u2014" ? /* @__PURE__ */ jsx(TableLink, { onClick: () => navigate("/purchase-orders"), children: row.poId }) : "\u2014" }),
-          /* @__PURE__ */ jsx(TableCell, { children: row.outslipId !== "\u2014" ? /* @__PURE__ */ jsx(TableLink, { onClick: () => navigate(`/outslips?id=${row.outslipId}`), children: row.outslipId }) : "\u2014" }),
-          /* @__PURE__ */ jsx(TableCell, { children: outslip?.status === "released" && /* @__PURE__ */ jsx(
-            Button,
-            {
-              size: "sm",
-              variant: "secondary",
-              onClick: () => handleCreateDeliveryReceipt(outslip.id),
-              children: "Create DR"
-            }
-          ) })
-        ] }, row.id);
-      }) })
-    ] }),
-    message && /* @__PURE__ */ jsx("p", { className: "mt-3 text-sm text-text-secondary", children: message })
-  ] });
+  const stock = report?.stock ?? []
+  const movements = report?.movements ?? []
+
+  return (
+    <div>
+      <PageHeader
+        title="Inventory"
+        description="Current stock and inventory movements from receiving and outslip dispatch."
+      />
+
+      {loading && !report ? (
+        <p className="mb-4 text-sm text-text-secondary">Loading inventory…</p>
+      ) : null}
+
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Card>
+          <CardContent className="pt-4">
+            <p className="text-sm text-text-secondary">Items</p>
+            <p className="mt-2 text-3xl font-semibold text-text-primary">{summary.itemCount}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <p className="text-sm text-text-secondary">Total quantity on hand</p>
+            <p className="mt-2 text-3xl font-semibold text-text-primary">
+              {summary.totalQuantity}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <p className="text-sm text-text-secondary">Inventory records</p>
+            <p className="mt-2 text-3xl font-semibold text-text-primary">
+              {summary.movementCount}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mb-6">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-base font-semibold text-text-primary">Current stock</h2>
+          <button
+            type="button"
+            className="text-sm text-maroon hover:underline"
+            onClick={() => navigate('/inventory/receiving')}
+          >
+            Go to Receiving
+          </button>
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>Item Code</TableHead>
+              <TableHead>Item</TableHead>
+              <TableHead>Quantity</TableHead>
+              <TableHead>Unit</TableHead>
+              <TableHead>Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {stock.length === 0 ? (
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={5} className="text-text-secondary">
+                  No stock movements yet. Confirm a receiving or dispatch an outslip.
+                </TableCell>
+              </TableRow>
+            ) : (
+              stock.map((row) => {
+                const st = getStatusDisplay(row.status)
+                return (
+                  <TableRow key={row.itemId}>
+                    <TableCell>{row.itemCode}</TableCell>
+                    <TableCell>{row.itemName}</TableCell>
+                    <TableCell>{row.quantity}</TableCell>
+                    <TableCell>{row.unit}</TableCell>
+                    <TableCell>
+                      <Badge variant={st.variant}>{st.label}</Badge>
+                    </TableCell>
+                  </TableRow>
+                )
+              })
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-base font-semibold text-text-primary">Inventory records</h2>
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search movements…"
+          className="max-w-xs"
+        />
+      </div>
+
+      <Table>
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            <TableHead>Date</TableHead>
+            <TableHead>Item</TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead>Trans ID</TableHead>
+            <TableHead>In</TableHead>
+            <TableHead>Out</TableHead>
+            <TableHead>Change</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {movements.length === 0 ? (
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={7} className="text-text-secondary">
+                No inventory records found.
+              </TableCell>
+            </TableRow>
+          ) : (
+            movements.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell>{row.displayDate || row.date}</TableCell>
+                <TableCell>
+                  {row.itemName}
+                  <span className="block text-xs text-text-secondary">{row.itemCode}</span>
+                </TableCell>
+                <TableCell>{row.transType}</TableCell>
+                <TableCell>{row.transId}</TableCell>
+                <TableCell>{row.in || '—'}</TableCell>
+                <TableCell>{row.out || '—'}</TableCell>
+                <TableCell>{row.change > 0 ? `+${row.change}` : row.change}</TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
+    </div>
+  )
 }
-export {
-  InventoryReportsPage
-};

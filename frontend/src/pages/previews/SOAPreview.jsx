@@ -1,46 +1,64 @@
 import {
   DocumentLayout,
   PrintActions,
-} from "@/components/documents/DocumentLayout";
-import { useDemo } from "@/context/DemoContext";
-import { formatCurrency } from "@/lib/format";
-import { buildCustomerLedgerRows } from "@/lib/ledgerUtils";
-import { useMemo } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+} from '@/components/documents/DocumentLayout'
+import { useSetupResource } from '@/hooks/useSetupResource'
+import { formatCurrency } from '@/lib/format'
+import { fetchSoa } from '@/lib/reportsApi'
+import { useEffect, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 export function SOAPreviewPage() {
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const { state, getCustomerName } = useDemo();
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const { rows: customers } = useSetupResource('customers')
+  const customerId = searchParams.get('customerId') ?? customers[0]?.id ?? ''
+  const [account, setAccount] = useState(null)
+  const [error, setError] = useState(null)
 
-  const customerId =
-    searchParams.get("customerId") ?? state.customers[0]?.id ?? "";
-  const customer = state.customers.find((c) => c.id === customerId);
-  const bills = state.billingStatements.filter((b) => b.customerId === customerId);
-  const payments = state.soaPayments.filter((p) => p.customerId === customerId);
-
-  const transactions = useMemo(
-    () => buildCustomerLedgerRows(bills, payments, getCustomerName),
-    [bills, payments, getCustomerName],
-  );
-
-  const totalCharges = bills.reduce((sum, bill) => sum + bill.amount, 0);
-  const totalPayments = payments.reduce((sum, payment) => sum + payment.amount, 0);
-  const outstanding = totalCharges - totalPayments;
+  useEffect(() => {
+    if (!customerId) return
+    let cancelled = false
+    fetchSoa({ customerId })
+      .then((data) => {
+        if (!cancelled) setAccount(data)
+      })
+      .catch((caught) => {
+        if (!cancelled) setError(caught?.message ?? 'Could not load SOA.')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [customerId])
 
   const backPath = customerId
     ? `/soa?customerId=${encodeURIComponent(customerId)}`
-    : "/soa";
+    : '/soa'
+
+  if (error) {
+    return <p className="text-text-secondary">{error}</p>
+  }
+
+  if (!account) {
+    return <p className="text-text-secondary">Loading SOA…</p>
+  }
+
+  const totals = account.totals ?? { totalDebit: 0, totalCredit: 0, outstanding: 0 }
 
   return (
     <div>
       <DocumentLayout title="STATEMENT OF ACCOUNT">
         <div className="space-y-1 text-sm">
           <p>
-            <span className="text-text-secondary">Customer:</span> {customer?.name}
+            <span className="text-text-secondary">Customer:</span> {account.customerName}
           </p>
+          {account.customerAddress ? (
+            <p>
+              <span className="text-text-secondary">Address:</span> {account.customerAddress}
+            </p>
+          ) : null}
           <p>
-            <span className="text-text-secondary">Period:</span> August 1–19, 2026
+            <span className="text-text-secondary">Period:</span> {account.periodLabel}
           </p>
         </div>
 
@@ -56,17 +74,13 @@ export function SOAPreviewPage() {
             </tr>
           </thead>
           <tbody>
-            {transactions.map((row, index) => (
+            {(account.rows ?? []).map((row, index) => (
               <tr key={`${row.ref}-${index}`} className="border-b border-border">
                 <td className="py-2">{row.date}</td>
                 <td>{row.ref}</td>
                 <td>{row.description}</td>
-                <td className="text-right">
-                  {row.debit ? formatCurrency(row.debit) : "—"}
-                </td>
-                <td className="text-right">
-                  {row.credit ? formatCurrency(row.credit) : "—"}
-                </td>
+                <td className="text-right">{row.debit ? formatCurrency(row.debit) : '—'}</td>
+                <td className="text-right">{row.credit ? formatCurrency(row.credit) : '—'}</td>
                 <td className="text-right">{formatCurrency(row.balance)}</td>
               </tr>
             ))}
@@ -76,15 +90,15 @@ export function SOAPreviewPage() {
         <div className="mt-6 space-y-2 text-sm">
           <div className="flex justify-between">
             <span>Total Charges:</span>
-            <span>{formatCurrency(totalCharges)}</span>
+            <span>{formatCurrency(totals.totalDebit)}</span>
           </div>
           <div className="flex justify-between">
             <span>Total Payments:</span>
-            <span>{formatCurrency(totalPayments)}</span>
+            <span>{formatCurrency(totals.totalCredit)}</span>
           </div>
           <div className="flex justify-between font-bold text-maroon">
             <span>Outstanding Balance:</span>
-            <span>{formatCurrency(outstanding)}</span>
+            <span>{formatCurrency(totals.outstanding)}</span>
           </div>
         </div>
 
@@ -101,5 +115,5 @@ export function SOAPreviewPage() {
       </DocumentLayout>
       <PrintActions onBack={() => navigate(backPath)} />
     </div>
-  );
+  )
 }

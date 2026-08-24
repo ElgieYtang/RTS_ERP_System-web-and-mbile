@@ -2,6 +2,7 @@ import { jsx } from "react/jsx-runtime";
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { initialDemoState } from "@/data/initialData";
 import { createSetupMutations } from "@/context/setupMutations";
+import { useToast } from "@/context/ToastContext";
 const DemoContext = createContext(null);
 function updateProductStock(products, productId, delta) {
   return products.map((p) => {
@@ -15,17 +16,7 @@ function updateProductStock(products, productId, delta) {
 }
 function DemoProvider({ children }) {
   const [state, setState] = useState(initialDemoState);
-  const [toasts, setToasts] = useState([]);
-  const showToast = useCallback((type, message) => {
-    const id = `toast-${Date.now()}`;
-    setToasts((prev) => [...prev, { id, type, message }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 3500);
-  }, []);
-  const removeToast = useCallback((id) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
+  const { toasts, showToast, removeToast } = useToast();
   const getCustomerName = useCallback(
     (id) => state.customers.find((c) => c.id === id)?.name ?? id,
     [state.customers]

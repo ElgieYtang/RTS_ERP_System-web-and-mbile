@@ -118,6 +118,279 @@ input.login-field:-webkit-autofill:active {
   padding-bottom: 24px;
 }
 
+.report-preview-frame--paginated {
+  overflow: visible;
+  padding-bottom: 0;
+}
+
+/* ── Accomplishment report printable (company format) ─────────── */
+.ar-print {
+  color: #000;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.ar-print__page {
+  display: flex;
+  flex-direction: column;
+  width: 210mm;
+  height: 297mm;
+  margin: 0 auto 24px;
+  padding: 10mm 12mm 12mm;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 8%);
+  box-sizing: border-box;
+  break-after: page;
+  page-break-after: always;
+}
+
+.ar-print__page + .ar-print__page {
+  break-before: page;
+  page-break-before: always;
+}
+
+.ar-print__page:last-child {
+  margin-bottom: 0;
+  break-after: auto;
+  page-break-after: auto;
+}
+
+@media screen {
+  .ar-print--paginated .ar-print__page--hidden-preview {
+    display: none;
+  }
+
+  .ar-print--paginated .ar-print__page:not(.ar-print__page--hidden-preview) {
+    margin-bottom: 0;
+  }
+}
+
+.ar-print__letterhead {
+  flex-shrink: 0;
+  margin-bottom: 4mm;
+}
+
+.ar-print__letterhead-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.ar-print__logo {
+  width: 18mm;
+  height: 18mm;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.ar-print__company {
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.ar-print__company-name {
+  margin: 0 0 3px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  line-height: 1.25;
+}
+
+.ar-print__company-line {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.ar-print__title {
+  margin: 5mm 0 4mm;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ar-print__continued .ar-print__title {
+  margin-top: 0;
+}
+
+.ar-print__page-no {
+  margin: 0 0 4mm;
+  text-align: right;
+  font-size: 10px;
+  color: #444;
+}
+
+.ar-print__info-table {
+  width: 100%;
+  flex-shrink: 0;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 11px;
+  margin-bottom: 0;
+}
+
+.ar-print__info-table th,
+.ar-print__info-table td {
+  border: 1px solid #000;
+  padding: 5px 8px;
+  vertical-align: top;
+  text-align: left;
+  font-weight: 400;
+}
+
+.ar-print__info-table th {
+  width: 22%;
+  font-weight: 700;
+  background: #fff;
+}
+
+.ar-print__info-table td {
+  word-wrap: break-word;
+}
+
+.ar-print__pictures {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid #000;
+  border-top: 0;
+}
+
+.ar-print__pictures--standalone {
+  border-top: 1px solid #000;
+}
+
+.ar-print__pictures-label {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  border-bottom: 1px solid #000;
+  background: #fff;
+}
+
+.ar-print__image-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+.ar-print__image-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 3px;
+  overflow: hidden;
+  background: #fff;
+  border-right: 1px solid #000;
+  border-bottom: 1px solid #000;
+}
+
+.ar-print__image-cell:nth-child(2n) {
+  border-right: none;
+}
+
+.ar-print__image-cell:nth-child(n + 3) {
+  border-bottom: none;
+}
+
+.ar-print__image-cell img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+.ar-print__image-empty {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 40mm;
+}
+
+.ar-print__image-remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 9999px;
+  background: rgb(0 0 0 / 65%);
+  color: #fff;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.ar-print__image-remove:hover {
+  background: rgb(127 29 29 / 90%);
+}
+
+.ar-print__signatures {
+  width: 100%;
+  flex-shrink: 0;
+  border-collapse: collapse;
+  table-layout: fixed;
+  margin-top: 5mm;
+  font-size: 11px;
+}
+
+.ar-print__signatures th,
+.ar-print__signatures td {
+  border: 1px solid #000;
+  padding: 6px 8px;
+  vertical-align: top;
+  width: 50%;
+  font-weight: 400;
+}
+
+.ar-print__signatures th {
+  font-weight: 700;
+  text-align: left;
+}
+
+.ar-print__signature-space {
+  height: 14mm;
+}
+
+.ar-print__signature-name {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ar-print__signature-role {
+  margin: 4px 0 0;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.ar-print__signature-role--center {
+  text-align: center;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* Legacy report classes (kept for compatibility) */
 .report-document {
   color: #111;
   font-family: var(--font-sans);
@@ -361,8 +634,11 @@ input.login-field:-webkit-autofill:active {
     display: none !important;
   }
 
+  .app-shell-header {
+    display: none !important;
+  }
+
   aside,
-  header,
   nav {
     display: none !important;
   }
@@ -388,6 +664,56 @@ input.login-field:-webkit-autofill:active {
   .report-preview-frame {
     overflow: visible;
     padding: 0;
+  }
+
+  .ar-print__page {
+    margin: 0;
+    border: none;
+    box-shadow: none;
+    width: 210mm;
+    height: 297mm;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .ar-print__page + .ar-print__page {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .ar-print__page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .ar-print--paginated .ar-print__page--hidden-preview {
+    display: flex !important;
+  }
+
+  .ar-print__image-grid,
+  .ar-print__image-cell,
+  .ar-print__image-cell img {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .ar-print__letterhead,
+  .quotation-print__header,
+  .ar-print__letterhead-row,
+  .ar-print__logo,
+  .quotation-print__logo {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .quotation-print__header,
+  .ar-print__letterhead-row {
+    display: flex !important;
+  }
+
+  .ar-print__logo,
+  .quotation-print__logo {
+    display: block !important;
   }
 
   .report-page {
@@ -422,7 +748,17 @@ input.login-field:-webkit-autofill:active {
 
 /* ── Quotation printable (company format) ───────────────────── */
 .quotation-print-page {
+  display: flex;
+  flex-direction: column;
   padding-bottom: 24px;
+}
+
+.print-page-actions {
+  order: -1;
+  align-self: flex-end;
+  display: flex;
+  gap: 12px;
+  margin: 0 0 16px;
 }
 
 .quotation-print {

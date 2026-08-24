@@ -62,7 +62,7 @@ function PrintActions({
   onBack,
   onPrint
 }) {
-  return /* @__PURE__ */ jsxs("div", { className: "mt-6 flex gap-3 no-print", children: [
+  return /* @__PURE__ */ jsxs("div", { className: "print-page-actions no-print", children: [
     onBack && /* @__PURE__ */ jsx(
       "button",
       {

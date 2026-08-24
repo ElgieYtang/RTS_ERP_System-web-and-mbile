@@ -1,0 +1,477 @@
+import 'dart:typed_data';
+
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+
+import '../services/api_client.dart';
+import '../services/api_errors.dart';
+import '../services/offline_cache.dart';
+import '../widgets/field_ui.dart';
+
+class AccomplishmentsPage extends StatefulWidget {
+  const AccomplishmentsPage({super.key, required this.api});
+
+  final ApiClient api;
+
+  @override
+  State<AccomplishmentsPage> createState() => _AccomplishmentsPageState();
+}
+
+class _AccomplishmentsPageState extends State<AccomplishmentsPage> {
+  bool _loading = true;
+  bool _creating = false;
+  bool _fromCache = false;
+  String? _error;
+  String? _offlineLabel;
+  List<Map<String, dynamic>> _rows = [];
+  List<Map<String, dynamic>> _projects = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+      _fromCache = false;
+      _offlineLabel = null;
+    });
+    try {
+      final reports = await widget.api.getList('/accomplishments');
+      final projects = await widget.api.getList('/setup/projects');
+      await OfflineCache.saveList(OfflineCache.accomplishments, reports);
+      if (!mounted) return;
+      setState(() {
+        _rows = reports
+            .cast<Map<String, dynamic>>()
+            .where((r) => r['status'] != 'inactive')
+            .toList();
+        _projects = projects.cast<Map<String, dynamic>>();
+        _loading = false;
+      });
+    } catch (error) {
+      final cached = await OfflineCache.loadList(OfflineCache.accomplishments);
+      if (!mounted) return;
+      if (cached.rows.isNotEmpty) {
+        setState(() {
+          _rows = cached.rows.where((r) => r['status'] != 'inactive').toList();
+          _fromCache = true;
+          _offlineLabel = OfflineCache.staleLabel(cached.savedAt);
+          _error = friendlyApiError(error);
+          _loading = false;
+        });
+      } else {
+        setState(() {
+          _error = friendlyApiError(error);
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _createReport() async {
+    if (_creating) return;
+    if (_fromCache) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Offline')),
+      );
+      return;
+    }
+    if (_projects.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No projects')),
+      );
+      return;
+    }
+
+    String? projectId = _projects.first['id']?.toString();
+    final remarksController = TextEditingController();
+
+    final created = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setLocal) {
+            return AlertDialog(
+              title: const Text('New accomplishment'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    initialValue: projectId,
+                    items: _projects
+                        .map(
+                          (p) => DropdownMenuItem(
+                            value: p['id']?.toString(),
+                            child: Text(
+                              p['name']?.toString() ?? 'Project',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) => setLocal(() => projectId = value),
+                    decoration: const InputDecoration(labelText: 'Project'),
+                  ),
+                  TextField(
+                    controller: remarksController,
+                    decoration: const InputDecoration(labelText: 'Remarks (optional)'),
+                    maxLines: 2,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Create')),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    final remarks = remarksController.text.trim();
+    remarksController.dispose();
+
+    if (created != true || projectId == null) return;
+
+    setState(() => _creating = true);
+    try {
+      final payload = await widget.api.post('/accomplishments', {
+        'projectId': int.tryParse(projectId!) ?? projectId,
+        'remarks': remarks.isEmpty ? null : remarks,
+        'status': 'pending',
+      });
+      final report = payload['data'] as Map<String, dynamic>?;
+      if (!mounted) return;
+      await _load();
+      if (!mounted) return;
+      if (report != null) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => AccomplishmentDetailPage(
+              api: widget.api,
+              reportId: report['dbId']?.toString() ?? report['id'].toString(),
+            ),
+          ),
+        );
+        if (mounted) await _load();
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyApiError(error))));
+    } finally {
+      if (mounted) setState(() => _creating = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading && _rows.isEmpty && _error == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return Scaffold(
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _creating || _fromCache ? null : _createReport,
+        icon: const Icon(Icons.add),
+        label: Text(_creating ? 'Creating…' : 'New'),
+      ),
+      body: RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(12),
+          children: [
+            if (_fromCache && _offlineLabel != null) FieldOfflineBanner(label: _offlineLabel!),
+            if (_error != null && !_fromCache) FieldErrorBanner(message: _error!, onRetry: _load),
+            if (_rows.isEmpty && (_error == null || _fromCache))
+              const FieldEmptyState(
+                icon: Icons.photo_camera_outlined,
+                title: 'No reports yet',
+              ),
+            ..._rows.map((row) {
+              final imageCount = (row['images'] as List<dynamic>? ?? const []).length;
+              return Card(
+                child: ListTile(
+                  title: Text(row['id']?.toString() ?? 'AR'),
+                  subtitle: Text(
+                    '${row['projectName'] ?? '—'}\n'
+                    '${row['displayDate'] ?? row['date'] ?? '—'} · $imageCount photo(s)',
+                  ),
+                  isThreeLine: true,
+                  trailing: FieldStatusChip(row['status']?.toString()),
+                  onTap: () async {
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => AccomplishmentDetailPage(
+                          api: widget.api,
+                          reportId: row['dbId']?.toString() ?? row['id'].toString(),
+                        ),
+                      ),
+                    );
+                    await _load();
+                  },
+                ),
+              );
+            }),
+            const SizedBox(height: 72),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class AccomplishmentDetailPage extends StatefulWidget {
+  const AccomplishmentDetailPage({
+    super.key,
+    required this.api,
+    required this.reportId,
+  });
+
+  final ApiClient api;
+  final String reportId;
+
+  @override
+  State<AccomplishmentDetailPage> createState() => _AccomplishmentDetailPageState();
+}
+
+class _AccomplishmentDetailPageState extends State<AccomplishmentDetailPage> {
+  bool _loading = true;
+  bool _uploading = false;
+  String? _error;
+  String? _uploadProgress;
+  Map<String, dynamic>? _report;
+  final Map<String, Uint8List> _photoBytes = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final report = await widget.api.getOne('/accomplishments/${widget.reportId}');
+      final images =
+          (report['images'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
+      final bytes = <String, Uint8List>{};
+      for (final image in images) {
+        final id = image['id']?.toString();
+        final src = image['src']?.toString();
+        if (id == null || src == null) continue;
+        try {
+          bytes[id] = await widget.api.getBytes(src);
+        } catch (_) {
+          // Skip broken photo.
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _report = report;
+        _photoBytes
+          ..clear()
+          ..addAll(bytes);
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = friendlyApiError(error);
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _pickAndUpload(ImageSource source) async {
+    if (_uploading) return;
+    final picker = ImagePicker();
+    final files = source == ImageSource.gallery
+        ? await picker.pickMultiImage(imageQuality: 75)
+        : [
+            if (await picker.pickImage(source: ImageSource.camera, imageQuality: 75) case final file?)
+              file,
+          ];
+
+    if (files.isEmpty) return;
+
+    setState(() {
+      _uploading = true;
+      _uploadProgress = 'Preparing photos…';
+    });
+    try {
+      final payload = <({String filename, Uint8List bytes})>[];
+      for (final file in files) {
+        final bytes = await file.readAsBytes();
+        payload.add((filename: file.name.isEmpty ? 'photo.jpg' : file.name, bytes: bytes));
+      }
+      final id = _report?['dbId']?.toString() ?? widget.reportId;
+      setState(() => _uploadProgress = 'Uploading (retries on weak signal)…');
+      await widget.api.uploadPhotos(accomplishmentId: id, files: payload);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Photos uploaded')),
+      );
+      await _load();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(friendlyApiError(error)),
+          action: SnackBarAction(
+            label: 'Retry',
+            onPressed: () => _pickAndUpload(source),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _uploading = false;
+          _uploadProgress = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _deletePhoto(String photoId) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete photo?'),
+        content: const Text('This removes the photo from the server.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    final id = _report?['dbId']?.toString() ?? widget.reportId;
+    try {
+      await widget.api.request('DELETE', '/accomplishments/$id/photos/$photoId');
+      await _load();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyApiError(error))));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final report = _report;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(report?['id']?.toString() ?? 'Accomplishment'),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : report == null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: FieldErrorBanner(
+                      message: _error ?? 'Report not found',
+                      onRetry: _load,
+                    ),
+                  ),
+                )
+              : ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            report['projectName']?.toString() ?? 'Project',
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        FieldStatusChip(report['status']?.toString()),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    if ((report['location']?.toString() ?? '').isNotEmpty)
+                      Text(report['location'].toString()),
+                    Text(report['displayDate']?.toString() ?? report['date']?.toString() ?? '—'),
+                    if ((report['remarks']?.toString() ?? '').isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(report['remarks'].toString()),
+                    ],
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        FilledButton.icon(
+                          onPressed: _uploading ? null : () => _pickAndUpload(ImageSource.camera),
+                          icon: const Icon(Icons.photo_camera),
+                          label: const Text('Camera'),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton.tonalIcon(
+                          onPressed: _uploading ? null : () => _pickAndUpload(ImageSource.gallery),
+                          icon: const Icon(Icons.photo_library),
+                          label: const Text('Gallery'),
+                        ),
+                      ],
+                    ),
+                    if (_uploading) ...[
+                      const SizedBox(height: 12),
+                      const LinearProgressIndicator(),
+                      const SizedBox(height: 4),
+                      Text(
+                        _uploadProgress ?? 'Uploading…',
+                        style: const TextStyle(color: Colors.black54),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    if (_photoBytes.isEmpty)
+                      const FieldEmptyState(
+                        icon: Icons.image_outlined,
+                        title: 'No photos yet',
+                      )
+                    else
+                      GridView.count(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        crossAxisCount: 2,
+                        mainAxisSpacing: 10,
+                        crossAxisSpacing: 10,
+                        children: _photoBytes.entries.map((entry) {
+                          return Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
+                                child: Image.memory(entry.value, fit: BoxFit.cover),
+                              ),
+                              Positioned(
+                                top: 6,
+                                right: 6,
+                                child: IconButton.filled(
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: Colors.black54,
+                                    minimumSize: const Size(32, 32),
+                                  ),
+                                  onPressed: () => _deletePhoto(entry.key),
+                                  icon: const Icon(Icons.close, color: Colors.white, size: 16),
+                                ),
+                              ),
+                            ],
+                          );
+                        }).toList(),
+                      ),
+                  ],
+                ),
+    );
+  }
+}

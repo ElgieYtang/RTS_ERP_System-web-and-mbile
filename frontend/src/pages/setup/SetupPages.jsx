@@ -1,5 +1,5 @@
 import { SETUP_FORM_FIELDS } from '@/config/setupFormFields'
-import { useDemo } from '@/context/DemoContext'
+import { useSetupResource } from '@/hooks/useSetupResource'
 import { SetupListPage } from '@/pages/setup/SetupListPage'
 
 function formatCustomerTerms(customer) {
@@ -8,44 +8,39 @@ function formatCustomerTerms(customer) {
 }
 
 export function UserSetupPage() {
-  const { state, addSetupUser, updateSetupUser, deactivateSetupUser } = useDemo()
+  const users = useSetupResource('users')
+  const positions = useSetupResource('positions')
 
   return (
     <SetupListPage
       title="User Setup"
-      description="System users. Type is ADMIN or USER (setup_users.type)."
+      description="System users stored in setup_users."
       breadcrumbs={['Setup', 'User']}
       actionLabel="+ Add User"
       searchPlaceholder="Search user..."
       rowIdKey="id"
       formFields={SETUP_FORM_FIELDS.users}
-      onAdd={addSetupUser}
-      onEdit={updateSetupUser}
-      onDelete={deactivateSetupUser}
+      rows={users.rows}
+      loading={users.loading}
+      loadError={users.error}
+      optionSources={{ positions: positions.rows }}
+      onAdd={users.add}
+      onEdit={users.edit}
+      onDelete={users.remove}
       columns={[
         { key: 'id', label: 'User ID' },
         { key: 'name', label: 'Name' },
         { key: 'username', label: 'Username' },
         { key: 'type', label: 'Type' },
         { key: 'position', label: 'Position' },
-        { key: 'branch', label: 'Branch' },
         { key: 'status', label: 'Status' },
       ]}
-      rows={state.setupUsers.map((user) => ({
-        id: user.id,
-        name: user.name,
-        username: user.username,
-        type: user.type,
-        position: user.position,
-        branch: user.branch,
-        status: user.status,
-      }))}
     />
   )
 }
 
 export function CompanySetupPage() {
-  const { state, addSetupCompany, updateSetupCompany, deactivateSetupCompany } = useDemo()
+  const companies = useSetupResource('companies')
 
   return (
     <SetupListPage
@@ -55,9 +50,12 @@ export function CompanySetupPage() {
       actionLabel="+ Add Company"
       rowIdKey="id"
       formFields={SETUP_FORM_FIELDS.companies}
-      onAdd={addSetupCompany}
-      onEdit={updateSetupCompany}
-      onDelete={deactivateSetupCompany}
+      rows={companies.rows}
+      loading={companies.loading}
+      loadError={companies.error}
+      onAdd={companies.add}
+      onEdit={companies.edit}
+      onDelete={companies.remove}
       columns={[
         { key: 'name', label: 'Company Name' },
         { key: 'address', label: 'Address' },
@@ -65,20 +63,13 @@ export function CompanySetupPage() {
         { key: 'tinNo', label: 'TIN' },
         { key: 'status', label: 'Status' },
       ]}
-      rows={state.setupCompanies.map((company) => ({
-        id: company.id,
-        name: company.name,
-        address: company.address,
-        contactNo: company.contactNo,
-        tinNo: company.tinNo,
-        status: company.status,
-      }))}
     />
   )
 }
 
 export function BranchSetupPage() {
-  const { state, addSetupBranch, updateSetupBranch, deactivateSetupBranch } = useDemo()
+  const branches = useSetupResource('branches')
+  const companies = useSetupResource('companies')
 
   return (
     <SetupListPage
@@ -86,31 +77,26 @@ export function BranchSetupPage() {
       description="Manage company branches."
       breadcrumbs={['Setup', 'Branch Setup']}
       actionLabel="+ Add Branch"
-      rowIdKey="code"
+      rowIdKey="id"
       formFields={SETUP_FORM_FIELDS.branches}
-      onAdd={addSetupBranch}
-      onEdit={updateSetupBranch}
-      onDelete={deactivateSetupBranch}
+      rows={branches.rows}
+      loading={branches.loading}
+      loadError={branches.error}
+      optionSources={{ companies: companies.rows }}
+      onAdd={branches.add}
+      onEdit={branches.edit}
+      onDelete={branches.remove}
       columns={[
-        { key: 'code', label: 'Branch Code' },
         { key: 'name', label: 'Branch Name' },
-        { key: 'address', label: 'Address' },
-        { key: 'contact', label: 'Contact' },
+        { key: 'companyName', label: 'Company' },
         { key: 'status', label: 'Status' },
       ]}
-      rows={state.setupBranches.map((branch) => ({
-        code: branch.code,
-        name: branch.name,
-        address: branch.address,
-        contact: branch.contact,
-        status: branch.status,
-      }))}
     />
   )
 }
 
 export function ProjectSetupPage() {
-  const { state, addSetupProject, updateSetupProject, deactivateSetupProject } = useDemo()
+  const projects = useSetupResource('projects')
 
   return (
     <SetupListPage
@@ -118,35 +104,25 @@ export function ProjectSetupPage() {
       description="Manage customer projects."
       breadcrumbs={['Setup', 'Project Setup']}
       actionLabel="+ Add Project"
-      rowIdKey="code"
+      rowIdKey="id"
       formFields={SETUP_FORM_FIELDS.projects}
-      onAdd={addSetupProject}
-      onEdit={updateSetupProject}
-      onDelete={deactivateSetupProject}
+      rows={projects.rows}
+      loading={projects.loading}
+      loadError={projects.error}
+      onAdd={projects.add}
+      onEdit={projects.edit}
+      onDelete={projects.remove}
       columns={[
-        { key: 'code', label: 'Project Code' },
         { key: 'name', label: 'Project Name' },
-        { key: 'customer', label: 'Customer' },
-        { key: 'branch', label: 'Branch' },
-        { key: 'startDate', label: 'Start Date' },
-        { key: 'endDate', label: 'End Date' },
+        { key: 'address', label: 'Address' },
         { key: 'status', label: 'Status' },
       ]}
-      rows={state.setupProjects.map((project) => ({
-        code: project.code,
-        name: project.name,
-        customer: project.customer,
-        branch: project.branch,
-        startDate: project.startDate,
-        endDate: project.endDate,
-        status: project.status,
-      }))}
     />
   )
 }
 
 export function PositionSetupPage() {
-  const { state, addSetupPosition, updateSetupPosition, deactivateSetupPosition } = useDemo()
+  const positions = useSetupResource('positions')
 
   return (
     <SetupListPage
@@ -154,27 +130,24 @@ export function PositionSetupPage() {
       description="Manage employee positions."
       breadcrumbs={['Setup', 'Position Setup']}
       actionLabel="+ Add Position"
-      rowIdKey="name"
+      rowIdKey="id"
       formFields={SETUP_FORM_FIELDS.positions}
-      onAdd={addSetupPosition}
-      onEdit={updateSetupPosition}
-      onDelete={deactivateSetupPosition}
+      rows={positions.rows}
+      loading={positions.loading}
+      loadError={positions.error}
+      onAdd={positions.add}
+      onEdit={positions.edit}
+      onDelete={positions.remove}
       columns={[
         { key: 'name', label: 'Position' },
-        { key: 'description', label: 'Description' },
         { key: 'status', label: 'Status' },
       ]}
-      rows={state.setupPositions.map((position) => ({
-        name: position.name,
-        description: position.description,
-        status: position.status,
-      }))}
     />
   )
 }
 
 export function CategorySetupPage() {
-  const { state, addSetupCategory, updateSetupCategory, deactivateSetupCategory } = useDemo()
+  const categories = useSetupResource('categories')
 
   return (
     <SetupListPage
@@ -182,29 +155,25 @@ export function CategorySetupPage() {
       description="Manage product categories."
       breadcrumbs={['Setup', 'Category']}
       actionLabel="+ Add Category"
-      rowIdKey="code"
+      rowIdKey="id"
       formFields={SETUP_FORM_FIELDS.categories}
-      onAdd={addSetupCategory}
-      onEdit={updateSetupCategory}
-      onDelete={deactivateSetupCategory}
+      rows={categories.rows}
+      loading={categories.loading}
+      loadError={categories.error}
+      onAdd={categories.add}
+      onEdit={categories.edit}
+      onDelete={categories.remove}
       columns={[
         { key: 'code', label: 'Category Code' },
         { key: 'name', label: 'Category Name' },
-        { key: 'description', label: 'Description' },
         { key: 'status', label: 'Status' },
       ]}
-      rows={state.setupCategories.map((category) => ({
-        code: category.code,
-        name: category.name,
-        description: category.description,
-        status: category.status,
-      }))}
     />
   )
 }
 
 export function BrandSetupPage() {
-  const { state, addSetupBrand, updateSetupBrand, deactivateSetupBrand } = useDemo()
+  const brands = useSetupResource('brands')
 
   return (
     <SetupListPage
@@ -212,27 +181,26 @@ export function BrandSetupPage() {
       description="Manage product brands."
       breadcrumbs={['Setup', 'Brand']}
       actionLabel="+ Add Brand"
-      rowIdKey="code"
+      rowIdKey="id"
       formFields={SETUP_FORM_FIELDS.brands}
-      onAdd={addSetupBrand}
-      onEdit={updateSetupBrand}
-      onDelete={deactivateSetupBrand}
+      rows={brands.rows}
+      loading={brands.loading}
+      loadError={brands.error}
+      onAdd={brands.add}
+      onEdit={brands.edit}
+      onDelete={brands.remove}
       columns={[
         { key: 'code', label: 'Brand Code' },
         { key: 'name', label: 'Brand Name' },
         { key: 'status', label: 'Status' },
       ]}
-      rows={state.setupBrands.map((brand) => ({
-        code: brand.code,
-        name: brand.name,
-        status: brand.status,
-      }))}
     />
   )
 }
 
 export function ModelSetupPage() {
-  const { state, addSetupModel, updateSetupModel, deactivateSetupModel } = useDemo()
+  const models = useSetupResource('models')
+  const brands = useSetupResource('brands')
 
   return (
     <SetupListPage
@@ -242,28 +210,24 @@ export function ModelSetupPage() {
       actionLabel="+ Add Model"
       rowIdKey="id"
       formFields={SETUP_FORM_FIELDS.models}
-      onAdd={addSetupModel}
-      onEdit={updateSetupModel}
-      onDelete={deactivateSetupModel}
+      rows={models.rows}
+      loading={models.loading}
+      loadError={models.error}
+      optionSources={{ brands: brands.rows }}
+      onAdd={models.add}
+      onEdit={models.edit}
+      onDelete={models.remove}
       columns={[
         { key: 'brand', label: 'Brand' },
         { key: 'name', label: 'Model Name' },
-        { key: 'description', label: 'Description' },
         { key: 'status', label: 'Status' },
       ]}
-      rows={state.setupModels.map((model) => ({
-        id: `${model.brand}-${model.name}`,
-        brand: model.brand,
-        name: model.name,
-        description: model.description,
-        status: model.status,
-      }))}
     />
   )
 }
 
 export function UnitMeasureSetupPage() {
-  const { state, addSetupUnit, updateSetupUnit, deactivateSetupUnit } = useDemo()
+  const units = useSetupResource('units')
 
   return (
     <SetupListPage
@@ -271,63 +235,63 @@ export function UnitMeasureSetupPage() {
       description="Manage units of measure."
       breadcrumbs={['Setup', 'Unit Measure']}
       actionLabel="+ Add Unit"
-      rowIdKey="code"
+      rowIdKey="id"
       formFields={SETUP_FORM_FIELDS.units}
-      onAdd={addSetupUnit}
-      onEdit={updateSetupUnit}
-      onDelete={deactivateSetupUnit}
+      rows={units.rows}
+      loading={units.loading}
+      loadError={units.error}
+      onAdd={units.add}
+      onEdit={units.edit}
+      onDelete={units.remove}
       columns={[
         { key: 'code', label: 'Code' },
         { key: 'name', label: 'Unit Name' },
-        { key: 'description', label: 'Description' },
         { key: 'status', label: 'Status' },
       ]}
-      rows={state.setupUnits.map((unit) => ({
-        code: unit.code,
-        name: unit.name,
-        description: unit.description,
-        status: unit.status,
-      }))}
     />
   )
 }
 
 export function ItemSetupPage() {
-  const { state, addSetupItem, updateSetupItem, deactivateSetupItem } = useDemo()
+  const items = useSetupResource('items')
+  const brands = useSetupResource('brands')
+  const models = useSetupResource('models')
+  const units = useSetupResource('units')
 
   return (
     <SetupListPage
       title="Item Setup"
-      description="Items are brand + model + name + unit (setup_items)."
+      description="Product catalog with live stock on hand."
       breadcrumbs={['Setup', 'Item']}
       actionLabel="+ Add Item"
-      rowIdKey="code"
+      rowIdKey="id"
       formFields={SETUP_FORM_FIELDS.items}
-      onAdd={addSetupItem}
-      onEdit={updateSetupItem}
-      onDelete={deactivateSetupItem}
+      rows={items.rows}
+      loading={items.loading}
+      loadError={items.error}
+      optionSources={{
+        brands: brands.rows,
+        models: models.rows,
+        units: units.rows,
+      }}
+      onAdd={items.add}
+      onEdit={items.edit}
+      onDelete={items.remove}
       columns={[
         { key: 'code', label: 'Item Code' },
         { key: 'brand', label: 'Brand' },
         { key: 'model', label: 'Model' },
         { key: 'name', label: 'Item Name' },
         { key: 'unit', label: 'Unit' },
+        { key: 'stock', label: 'Stock on hand' },
         { key: 'status', label: 'Status' },
       ]}
-      rows={state.setupItems.map((item) => ({
-        code: item.code,
-        brand: item.brand,
-        model: item.model,
-        name: item.name,
-        unit: item.unit,
-        status: item.status,
-      }))}
     />
   )
 }
 
 export function SupplierSetupPage() {
-  const { state, addSupplier, updateSupplier, deactivateSupplier } = useDemo()
+  const suppliers = useSetupResource('suppliers')
 
   return (
     <SetupListPage
@@ -337,9 +301,12 @@ export function SupplierSetupPage() {
       actionLabel="+ Add Supplier"
       rowIdKey="id"
       formFields={SETUP_FORM_FIELDS.suppliers}
-      onAdd={addSupplier}
-      onEdit={updateSupplier}
-      onDelete={deactivateSupplier}
+      rows={suppliers.rows}
+      loading={suppliers.loading}
+      loadError={suppliers.error}
+      onAdd={suppliers.add}
+      onEdit={suppliers.edit}
+      onDelete={suppliers.remove}
       columns={[
         { key: 'code', label: 'Supplier Code' },
         { key: 'name', label: 'Supplier Name' },
@@ -347,21 +314,12 @@ export function SupplierSetupPage() {
         { key: 'phone', label: 'Contact No.' },
         { key: 'status', label: 'Status' },
       ]}
-      rows={state.suppliers.map((supplier, index) => ({
-        id: supplier.id,
-        code: supplier.code ?? `SUP-${String(index + 1).padStart(3, '0')}`,
-        name: supplier.name,
-        contact: supplier.contactPerson,
-        phone: supplier.phone,
-        email: supplier.email,
-        status: supplier.status ?? 'Active',
-      }))}
     />
   )
 }
 
 export function CustomerSetupPage() {
-  const { state, addCustomer, updateCustomer, deactivateCustomer } = useDemo()
+  const customers = useSetupResource('customers')
 
   return (
     <SetupListPage
@@ -371,26 +329,23 @@ export function CustomerSetupPage() {
       actionLabel="+ Add Customer"
       rowIdKey="id"
       formFields={SETUP_FORM_FIELDS.customers}
-      onAdd={addCustomer}
-      onEdit={updateCustomer}
-      onDelete={deactivateCustomer}
+      rows={customers.rows.map((customer) => ({
+        ...customer,
+        termsDisplay: formatCustomerTerms(customer),
+      }))}
+      loading={customers.loading}
+      loadError={customers.error}
+      onAdd={customers.add}
+      onEdit={customers.edit}
+      onDelete={customers.remove}
       columns={[
         { key: 'code', label: 'Customer Code' },
         { key: 'name', label: 'Customer Name' },
         { key: 'address', label: 'Address' },
         { key: 'tin', label: 'TIN' },
-        { key: 'terms', label: 'Terms' },
+        { key: 'termsDisplay', label: 'Terms' },
         { key: 'status', label: 'Status' },
       ]}
-      rows={state.customers.map((customer, index) => ({
-        id: customer.id,
-        code: customer.code ?? `CUS-${String(index + 1).padStart(3, '0')}`,
-        name: customer.name,
-        address: customer.address,
-        tin: customer.tinNo ?? '—',
-        terms: formatCustomerTerms(customer),
-        status: customer.status ?? 'Active',
-      }))}
     />
   )
 }

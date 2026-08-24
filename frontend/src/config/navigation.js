@@ -29,6 +29,7 @@ const navigation = [
       { label: "Quotations", path: "/quotations", icon: FileText },
       { label: "Purchase Orders", path: "/purchase-order", icon: ShoppingCart },
       { label: "Receiving", path: "/inventory/receiving", icon: ClipboardList },
+      { label: "Outslip", path: "/outslip", icon: Package },
       { label: "Delivery Receipts", path: "/delivery-receipt", icon: Truck },
       { label: "Billing", path: "/billing", icon: Receipt },
       { label: "Statement of Account", path: "/soa", icon: FileSpreadsheet },

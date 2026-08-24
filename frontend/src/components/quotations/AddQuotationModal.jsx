@@ -2,16 +2,18 @@ import { Button } from '@/components/ui/button'
 import { FormField, Input, Label } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { useDemo } from '@/context/DemoContext'
+import { useTransactions } from '@/context/TransactionContext'
+import { useSetupResource } from '@/hooks/useSetupResource'
 import { formatCurrency } from '@/lib/format'
-import {
-  addDaysDisplayDate,
-  formatDisplayDate,
-  getCustomerDetails,
-} from '@/lib/quotationHelpers'
+import { getCustomerDetails } from '@/lib/quotationHelpers'
 import { Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 const EMPTY_ITEM = { productId: '', quantity: 1, unitPrice: 0 }
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10)
+}
 
 function ReadOnlyField({ label, value }) {
   return (
@@ -22,17 +24,24 @@ function ReadOnlyField({ label, value }) {
 }
 
 export function AddQuotationModal({ open, onClose }) {
-  const { state, addQuotation, showToast } = useDemo()
+  const { showToast } = useDemo()
+  const { addQuotation } = useTransactions()
+  const customers = useSetupResource('customers')
+  const itemsCatalog = useSetupResource('items')
+
   const activeCustomers = useMemo(
-    () => state.customers.filter((customer) => customer.status !== 'Inactive'),
-    [state.customers],
+    () => customers.rows.filter((customer) => customer.status !== 'Inactive'),
+    [customers.rows],
+  )
+  const activeItems = useMemo(
+    () => itemsCatalog.rows.filter((item) => item.status !== 'Inactive'),
+    [itemsCatalog.rows],
   )
 
   const [customerId, setCustomerId] = useState('')
-  const [subject, setSubject] = useState('')
-  const [date, setDate] = useState(formatDisplayDate())
-  const [validUntil, setValidUntil] = useState(addDaysDisplayDate(30))
+  const [date, setDate] = useState(todayIso())
   const [items, setItems] = useState([{ ...EMPTY_ITEM }])
+  const [submitting, setSubmitting] = useState(false)
 
   const selectedCustomer = activeCustomers.find((customer) => customer.id === customerId)
   const customerDetails = getCustomerDetails(selectedCustomer)
@@ -45,9 +54,7 @@ export function AddQuotationModal({ open, onClose }) {
   useEffect(() => {
     if (!open) return
     setCustomerId(activeCustomers[0]?.id ?? '')
-    setSubject('')
-    setDate(formatDisplayDate())
-    setValidUntil(addDaysDisplayDate(30))
+    setDate(todayIso())
     setItems([{ ...EMPTY_ITEM }])
   }, [open, activeCustomers])
 
@@ -58,11 +65,7 @@ export function AddQuotationModal({ open, onClose }) {
   }
 
   const handleProductChange = (index, productId) => {
-    const product = state.products.find((entry) => entry.id === productId)
-    updateItem(index, {
-      productId,
-      unitPrice: product?.price ?? 0,
-    })
+    updateItem(index, { productId, unitPrice: 0 })
   }
 
   const addItemRow = () => {
@@ -73,7 +76,7 @@ export function AddQuotationModal({ open, onClose }) {
     setItems((current) => (current.length === 1 ? current : current.filter((_, i) => i !== index)))
   }
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
 
     if (!customerId) {
@@ -81,18 +84,7 @@ export function AddQuotationModal({ open, onClose }) {
       return
     }
 
-    const lineItems = items
-      .filter((item) => item.productId)
-      .map((item) => {
-        const product = state.products.find((entry) => entry.id === item.productId)
-        return {
-          productId: item.productId,
-          productName: product?.name ?? item.productId,
-          quantity: Number(item.quantity),
-          unitPrice: Number(item.unitPrice),
-          unit: product?.unit,
-        }
-      })
+    const lineItems = items.filter((item) => item.productId)
 
     if (lineItems.length === 0) {
       showToast('error', 'Add at least one item.')
@@ -104,16 +96,20 @@ export function AddQuotationModal({ open, onClose }) {
       return
     }
 
-    addQuotation({
-      customerId,
-      date,
-      validUntil,
-      subject,
-      terms: customerDetails.terms,
-      items: lineItems,
-    })
-
-    onClose()
+    setSubmitting(true)
+    try {
+      await addQuotation({
+        customerId,
+        date,
+        items: lineItems,
+      })
+      showToast('success', 'Quotation created successfully.')
+      onClose()
+    } catch (caught) {
+      showToast('error', caught?.message ?? 'Could not create quotation.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -124,11 +120,11 @@ export function AddQuotationModal({ open, onClose }) {
       size="xl"
       footer={
         <div className="flex justify-end gap-3">
-          <Button type="button" variant="secondary" onClick={onClose}>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={submitting}>
             Cancel
           </Button>
-          <Button type="submit" form="add-quotation-form">
-            Add
+          <Button type="submit" form="add-quotation-form" disabled={submitting}>
+            {submitting ? 'Saving…' : 'Add'}
           </Button>
         </div>
       }
@@ -153,34 +149,23 @@ export function AddQuotationModal({ open, onClose }) {
             </select>
           </FormField>
 
-          {selectedCustomer && (
+          {selectedCustomer ? (
             <div className="grid grid-cols-1 gap-4 rounded-lg border border-border bg-maroon-light/30 p-4 sm:grid-cols-2">
               <ReadOnlyField label="Customer Name" value={customerDetails.name} />
-              <ReadOnlyField label="Contact Person" value={customerDetails.contactPerson} />
               <ReadOnlyField label="Address" value={customerDetails.address} />
-              <ReadOnlyField label="Telephone No." value={customerDetails.phone} />
-              <ReadOnlyField label="Email" value={customerDetails.email} />
               <ReadOnlyField label="TIN No." value={customerDetails.tinNo} />
-              <div className="sm:col-span-2">
-                <ReadOnlyField label="Terms" value={customerDetails.terms} />
-              </div>
+              <ReadOnlyField label="Terms" value={customerDetails.terms} />
             </div>
+          ) : (
+            <p className="text-sm text-text-secondary">
+              Add customers under Setup → Customer before creating a quotation.
+            </p>
           )}
         </section>
 
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <section>
           <FormField label="Date">
-            <Input value={date} onChange={(event) => setDate(event.target.value)} />
-          </FormField>
-          <FormField label="Valid Until">
-            <Input value={validUntil} onChange={(event) => setValidUntil(event.target.value)} />
-          </FormField>
-          <FormField label="Subject" className="sm:col-span-1">
-            <Input
-              value={subject}
-              onChange={(event) => setSubject(event.target.value)}
-              placeholder="Quotation subject"
-            />
+            <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
           </FormField>
         </section>
 
@@ -192,6 +177,12 @@ export function AddQuotationModal({ open, onClose }) {
               Add Item
             </Button>
           </div>
+
+          {activeItems.length === 0 ? (
+            <p className="text-sm text-text-secondary">
+              Add items under Setup → Item before creating a quotation.
+            </p>
+          ) : null}
 
           <div className="space-y-3">
             {items.map((item, index) => {
@@ -208,9 +199,9 @@ export function AddQuotationModal({ open, onClose }) {
                       className="h-9 w-full rounded-md border border-border-input bg-surface px-3 text-sm"
                     >
                       <option value="">Select item...</option>
-                      {state.products.map((product) => (
+                      {activeItems.map((product) => (
                         <option key={product.id} value={product.id}>
-                          {product.sku ? `${product.sku} — ` : ''}
+                          {product.code ? `${product.code} — ` : ''}
                           {product.name}
                         </option>
                       ))}
@@ -238,9 +229,9 @@ export function AddQuotationModal({ open, onClose }) {
 
                   <div className="flex items-end">
                     <div className="w-full">
-                      {index === 0 && (
+                      {index === 0 ? (
                         <Label className="mb-1.5 block text-xs text-text-secondary">Amount</Label>
-                      )}
+                      ) : null}
                       <div className="flex h-9 items-center text-sm font-medium">
                         {formatCurrency(amount)}
                       </div>
