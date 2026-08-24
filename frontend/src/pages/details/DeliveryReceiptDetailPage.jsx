@@ -1,57 +1,114 @@
-import { Fragment, jsx, jsxs } from "react/jsx-runtime";
-import { MobileDetailField, MobileDetailShell, MobileStickyActions } from "@/components/layout/MobileDetailShell";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { TransactionWorkflow } from "@/components/workflow/TransactionWorkflow";
-import { useDemo } from "@/context/DemoContext";
-import { getStatusDisplay } from "@/lib/status";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
-function DeliveryReceiptDetailPage() {
-  const { id } = useParams();
-  const { state, getCustomerName, markDeliveryOutForDelivery, markDeliveryDelivered } = useDemo();
-  const navigate = useNavigate();
-  const dr = state.deliveryReceipts.find((d) => d.id === id);
-  if (!dr) return /* @__PURE__ */ jsx(Navigate, { to: "/delivery-receipt", replace: true });
-  const st = getStatusDisplay(dr.status);
-  const outslip = state.outslips.find((o) => o.id === dr.referenceOutslipId);
-  const po = outslip ? state.purchaseOrders.find((p) => p.id === outslip.referencePoId) : void 0;
-  return /* @__PURE__ */ jsxs(Fragment, { children: [
-    /* @__PURE__ */ jsxs(
-      MobileDetailShell,
-      {
-        title: dr.id,
-        backTo: "/delivery-receipt",
-        actions: /* @__PURE__ */ jsxs(MobileStickyActions, { children: [
-          dr.status === "active" && /* @__PURE__ */ jsx(Button, { className: "w-full", onClick: () => markDeliveryOutForDelivery(dr.id), children: "Mark Out for Delivery" }),
-          dr.status === "out_for_delivery" && /* @__PURE__ */ jsx(Button, { className: "w-full", onClick: () => markDeliveryDelivered(dr.id), children: "Mark Delivered" }),
-          /* @__PURE__ */ jsx(
-            Button,
-            {
-              variant: "secondary",
-              className: "w-full",
-              onClick: () => navigate(`/delivery-receipt/${dr.id}/preview`),
-              children: "Preview / Print"
-            }
-          )
-        ] }),
-        children: [
-          /* @__PURE__ */ jsx("div", { className: "mb-4", children: /* @__PURE__ */ jsx(Badge, { variant: st.variant, children: st.label }) }),
-          /* @__PURE__ */ jsxs("div", { className: "mb-4 grid grid-cols-2 gap-3", children: [
-            /* @__PURE__ */ jsx(MobileDetailField, { label: "Customer", value: getCustomerName(dr.customerId) }),
-            /* @__PURE__ */ jsx(MobileDetailField, { label: "Reference OS", value: dr.referenceOutslipId }),
-            /* @__PURE__ */ jsx(MobileDetailField, { label: "Delivery Date", value: dr.date }),
-            /* @__PURE__ */ jsx(MobileDetailField, { label: "Address", value: dr.deliveryAddress }),
-            /* @__PURE__ */ jsx(MobileDetailField, { label: "Driver", value: dr.driver }),
-            /* @__PURE__ */ jsx(MobileDetailField, { label: "Vehicle", value: dr.vehicle })
-          ] }),
-          /* @__PURE__ */ jsx("h2", { className: "mb-2 mt-4 text-sm font-semibold text-text-primary", children: "Workflow" }),
-          /* @__PURE__ */ jsx(TransactionWorkflow, { quotationId: po?.referenceQuotationId })
-        ]
-      }
-    ),
-    /* @__PURE__ */ jsx("div", { className: "hidden md:block", children: /* @__PURE__ */ jsx(Navigate, { to: "/delivery-receipt", replace: true }) })
-  ] });
+import { MobileDetailField, MobileDetailShell, MobileStickyActions } from '@/components/layout/MobileDetailShell'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { useDemo } from '@/context/DemoContext'
+import { useTransactions } from '@/context/TransactionContext'
+import { formatCurrency } from '@/lib/format'
+import { getStatusDisplay } from '@/lib/status'
+import { useState } from 'react'
+import { Navigate, useNavigate, useParams } from 'react-router-dom'
+
+export function DeliveryReceiptDetailPage() {
+  const { id } = useParams()
+  const { showToast } = useDemo()
+  const {
+    deliveryReceipts,
+    loading,
+    markDeliveryOutForDelivery,
+    markDeliveryDelivered,
+    createBillingFromDelivery,
+  } = useTransactions()
+  const navigate = useNavigate()
+  const [busy, setBusy] = useState(false)
+
+  const dr = deliveryReceipts.find((d) => d.id === id)
+  if (!loading && !dr) return <Navigate to="/delivery-receipt" replace />
+  if (!dr) return <p className="p-4 text-sm text-text-secondary">Loading…</p>
+
+  const st = getStatusDisplay(dr.status)
+
+  const handleOutForDelivery = async () => {
+    setBusy(true)
+    try {
+      await markDeliveryOutForDelivery(dr.id)
+      showToast('success', 'Delivery marked as out for delivery.')
+    } catch (caught) {
+      showToast('error', caught?.message ?? 'Could not update.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleDelivered = async () => {
+    setBusy(true)
+    try {
+      await markDeliveryDelivered(dr.id)
+      showToast('success', 'Delivery marked as completed.')
+    } catch (caught) {
+      showToast('error', caught?.message ?? 'Could not mark delivered.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleCreateBilling = async () => {
+    setBusy(true)
+    try {
+      const bill = await createBillingFromDelivery(dr.id)
+      showToast('success', `Billing ${bill?.id ?? ''} created.`)
+      navigate('/billing')
+    } catch (caught) {
+      showToast('error', caught?.message ?? 'Could not create billing.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <>
+      <MobileDetailShell
+        title={dr.id}
+        backTo="/delivery-receipt"
+        actions={
+          <MobileStickyActions>
+            {dr.status === 'active' ? (
+              <Button className="w-full" disabled={busy} onClick={handleOutForDelivery}>
+                Mark Out for Delivery
+              </Button>
+            ) : null}
+            {dr.status === 'out_for_delivery' ? (
+              <Button className="w-full" disabled={busy} onClick={handleDelivered}>
+                Mark Delivered
+              </Button>
+            ) : null}
+            {dr.status === 'delivered' ? (
+              <Button className="w-full" disabled={busy} onClick={handleCreateBilling}>
+                Create Billing
+              </Button>
+            ) : null}
+            <Button
+              variant="secondary"
+              className="w-full"
+              onClick={() => navigate(`/delivery-receipt/${dr.id}/preview`)}
+            >
+              Preview / Print
+            </Button>
+          </MobileStickyActions>
+        }
+      >
+        <div className="mb-4">
+          <Badge variant={st.variant}>{st.label}</Badge>
+        </div>
+        <div className="mb-4 grid grid-cols-2 gap-3">
+          <MobileDetailField label="Customer" value={dr.customerName || dr.customerId} />
+          <MobileDetailField label="Reference OS" value={dr.referenceOutslipId} />
+          <MobileDetailField label="Delivery Date" value={dr.displayDate || dr.date} />
+          <MobileDetailField label="Total" value={formatCurrency(dr.total ?? 0)} />
+        </div>
+      </MobileDetailShell>
+      <div className="hidden md:block">
+        <Navigate to="/delivery-receipt" replace />
+      </div>
+    </>
+  )
 }
-export {
-  DeliveryReceiptDetailPage
-};

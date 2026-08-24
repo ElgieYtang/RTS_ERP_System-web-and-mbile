@@ -1,53 +1,108 @@
-import { jsx } from "react/jsx-runtime";
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
-const AUTH_STORAGE_KEY = "rc-erp-session";
-const AuthContext = createContext(null);
-const DEMO_USER = {
-  name: "Admin",
-  email: "admin@responsivcode.com"
-};
-const DEMO_PASSWORD = "admin123";
-function readStoredUser() {
-  try {
-    const raw = sessionStorage.getItem(AUTH_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
+import {
+  AUTH_UNAUTHORIZED_EVENT,
+  fetchCurrentUser,
+  loginRequest,
+  logoutRequest,
+  readStoredSession,
+  writeStoredSession,
+} from '@/lib/api'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+
+const AuthContext = createContext(null)
+
 function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => readStoredUser());
-  const login = useCallback((email, password) => {
-    const normalized = email.trim().toLowerCase();
-    const validEmail = normalized === DEMO_USER.email || normalized === "admin";
-    const validPassword = password === DEMO_PASSWORD || password === "admin";
-    if (!validEmail || !validPassword) return false;
-    const sessionUser = { ...DEMO_USER, email: normalized === "admin" ? DEMO_USER.email : normalized };
-    sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(sessionUser));
-    setUser(sessionUser);
-    return true;
-  }, []);
-  const logout = useCallback(() => {
-    sessionStorage.removeItem(AUTH_STORAGE_KEY);
-    setUser(null);
-  }, []);
+  const [user, setUser] = useState(() => readStoredSession()?.user ?? null)
+  const [isBootstrapping, setIsBootstrapping] = useState(() => !!readStoredSession()?.token)
+
+  useEffect(() => {
+    const session = readStoredSession()
+
+    if (!session?.token) {
+      setIsBootstrapping(false)
+      return
+    }
+
+    let cancelled = false
+
+    fetchCurrentUser()
+      .then((payload) => {
+        if (cancelled) return
+
+        const nextUser = payload.user
+        setUser(nextUser)
+        writeStoredSession({ ...session, user: nextUser })
+      })
+      .catch(() => {
+        if (cancelled) return
+
+        writeStoredSession(null)
+        setUser(null)
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsBootstrapping(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    const onUnauthorized = () => {
+      setUser(null)
+    }
+
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, onUnauthorized)
+    return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, onUnauthorized)
+  }, [])
+
+  const login = useCallback(async (loginValue, password) => {
+    const payload = await loginRequest(loginValue, password)
+
+    writeStoredSession({
+      token: payload.token,
+      user: payload.user,
+    })
+    setUser(payload.user)
+
+    return payload.user
+  }, [])
+
+  const logout = useCallback(async () => {
+    try {
+      await logoutRequest()
+    } catch {
+      // Clear local session even if the API is unreachable.
+    }
+
+    writeStoredSession(null)
+    setUser(null)
+  }, [])
+
   const value = useMemo(
     () => ({
       user,
       isAuthenticated: !!user,
+      isBootstrapping,
       login,
-      logout
+      logout,
     }),
-    [user, login, logout]
-  );
-  return /* @__PURE__ */ jsx(AuthContext.Provider, { value, children });
+    [user, isBootstrapping, login, logout],
+  )
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
+
 function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
-  return ctx;
+  const context = useContext(AuthContext)
+
+  if (!context) {
+    throw new Error('useAuth must be used within AuthProvider')
+  }
+
+  return context
 }
-export {
-  AuthProvider,
-  useAuth
-};
+
+export { AuthProvider, useAuth }

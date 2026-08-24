@@ -1,7 +1,8 @@
-import { PageHeader } from "@/components/layout/PageHeader";
-import { LoadingButton } from "@/components/ui/action-menu";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader } from '@/components/layout/PageHeader'
+import { LoadingButton } from '@/components/ui/action-menu'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { DateRangeFilter } from '@/components/ui/table-filters'
 import {
   Table,
   TableBody,
@@ -9,96 +10,79 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { useDemo } from "@/context/DemoContext";
-import { formatCurrency } from "@/lib/format";
-import { useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+} from '@/components/ui/table'
+import { useDemo } from '@/context/DemoContext'
+import { useSetupResource } from '@/hooks/useSetupResource'
+import { formatCurrency } from '@/lib/format'
+import { fetchSoa } from '@/lib/reportsApi'
+import { useCallback, useEffect, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 export function SOAPage() {
-  const { state, getCustomerName, generateSOA } = useDemo();
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const initialCustomerId =
-    searchParams.get("customerId") ?? state.customers[0]?.id ?? "cust-abc";
-  const [customerId, setCustomerId] = useState(initialCustomerId);
-  const [loading, setLoading] = useState(false);
+  const { showToast } = useDemo()
+  const { rows: customers, loading: customersLoading } = useSetupResource('customers')
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [customerId, setCustomerId] = useState(searchParams.get('customerId') ?? '')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [account, setAccount] = useState(null)
+  const [loading, setLoading] = useState(false)
 
-  const customer = state.customers.find((c) => c.id === customerId);
-  const bills = state.billingStatements.filter((b) => b.customerId === customerId);
-  const payments = state.soaPayments.filter((p) => p.customerId === customerId);
-  const totalCharges = bills.reduce((sum, bill) => sum + bill.amount, 0);
-  const totalPayments = payments.reduce((sum, payment) => sum + payment.amount, 0);
-  const outstanding = totalCharges - totalPayments;
-
-  const transactions = useMemo(() => {
-    const rows = [];
-    let balance = 0;
-
-    const entries = [
-      ...bills.map((bill) => ({
-        date: bill.billingDate,
-        ref: bill.id,
-        desc: bill.referenceDrId
-          ? `Billing — ${bill.referenceDrId}`
-          : `Billing — ${getCustomerName(bill.customerId)}`,
-        debit: bill.amount,
-        credit: 0,
-        sortKey: bill.billingDate,
-      })),
-      ...payments.map((payment) => ({
-        date: payment.date,
-        ref: payment.reference,
-        desc: payment.description,
-        debit: 0,
-        credit: payment.amount,
-        sortKey: payment.date,
-      })),
-    ].sort((a, b) => String(a.sortKey).localeCompare(String(b.sortKey)));
-
-    for (const entry of entries) {
-      balance += entry.debit - entry.credit;
-      rows.push({
-        date: entry.date,
-        ref: entry.ref,
-        desc: entry.desc,
-        debit: entry.debit,
-        credit: entry.credit,
-        balance,
-      });
+  useEffect(() => {
+    if (!customerId && customers[0]?.id) {
+      setCustomerId(String(customers[0].id))
     }
+  }, [customers, customerId])
 
-    return rows;
-  }, [bills, payments, getCustomerName]);
+  const loadSoa = useCallback(async () => {
+    if (!customerId) return
+    setLoading(true)
+    try {
+      const data = await fetchSoa({
+        customerId,
+        from: dateFrom || undefined,
+        to: dateTo || undefined,
+      })
+      setAccount(data)
+    } catch (caught) {
+      showToast('error', caught?.message ?? 'Could not load SOA.')
+      setAccount(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [customerId, dateFrom, dateTo, showToast])
 
-  const previewPath = `/soa/preview?customerId=${encodeURIComponent(customerId)}`;
+  useEffect(() => {
+    if (customerId) {
+      setSearchParams({ customerId: String(customerId) }, { replace: true })
+      loadSoa()
+    }
+  }, [customerId, dateFrom, dateTo, loadSoa, setSearchParams])
 
-  const handleGenerate = () => {
-    setLoading(true);
-    setTimeout(() => {
-      generateSOA();
-      setLoading(false);
-    }, 400);
-  };
+  const previewPath = `/soa/preview?customerId=${encodeURIComponent(customerId)}`
+  const totals = account?.totals ?? { totalDebit: 0, totalCredit: 0, outstanding: 0 }
+  const rows = account?.rows ?? []
 
   return (
     <div>
       <PageHeader
         title="Statement of Account"
-        description="Generated from billing statements. Feeds into the accomplishment report."
+        description="Generated from billing statements and payments."
         action={
           <div className="flex flex-wrap gap-2">
-            <LoadingButton loading={loading} onClick={handleGenerate}>
+            <LoadingButton loading={loading} onClick={loadSoa}>
               Generate SOA
             </LoadingButton>
-            <Button variant="secondary" onClick={() => navigate(previewPath)}>
+            <Button variant="secondary" onClick={() => navigate(previewPath)} disabled={!customerId}>
               Preview
             </Button>
             <Button
               variant="secondary"
+              disabled={!customerId}
               onClick={() => {
-                navigate(previewPath);
-                setTimeout(() => window.print(), 300);
+                navigate(previewPath)
+                setTimeout(() => window.print(), 300)
               }}
             >
               Print
@@ -107,27 +91,39 @@ export function SOAPage() {
         }
       />
 
-      <div className="mb-4 flex items-center gap-3">
-        <label className="text-sm font-medium">Customer:</label>
-        <select
-          value={customerId}
-          onChange={(e) => setCustomerId(e.target.value)}
-          className="h-9 rounded-md border border-border-input bg-surface px-3 text-sm"
-        >
-          {state.customers.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+      <div className="mb-4 flex flex-wrap items-end gap-4">
+        <div>
+          <label className="mb-1 block text-sm font-medium">Customer</label>
+          <select
+            value={customerId}
+            onChange={(e) => setCustomerId(e.target.value)}
+            className="h-9 min-w-[220px] rounded-md border border-border-input bg-surface px-3 text-sm"
+            disabled={customersLoading}
+          >
+            <option value="">Select customer…</option>
+            {customers.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <DateRangeFilter
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onDateFromChange={setDateFrom}
+          onDateToChange={setDateTo}
+        />
       </div>
 
       <Card className="mb-6">
         <CardContent className="pt-4">
-          <p className="text-sm text-text-secondary">Period: August 1–19, 2026</p>
-          <p className="mt-1 font-semibold">{customer?.name}</p>
+          <p className="text-sm text-text-secondary">Period: {account?.periodLabel ?? '—'}</p>
+          <p className="mt-1 font-semibold">{account?.customerName ?? '—'}</p>
         </CardContent>
       </Card>
+
+      {loading ? <p className="mb-4 text-sm text-text-secondary">Loading SOA…</p> : null}
 
       <Table>
         <TableHeader>
@@ -141,16 +137,24 @@ export function SOAPage() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {transactions.map((row, index) => (
-            <TableRow key={`${row.ref}-${index}`}>
-              <TableCell>{row.date}</TableCell>
-              <TableCell>{row.ref}</TableCell>
-              <TableCell>{row.desc}</TableCell>
-              <TableCell>{row.debit ? formatCurrency(row.debit) : "—"}</TableCell>
-              <TableCell>{row.credit ? formatCurrency(row.credit) : "—"}</TableCell>
-              <TableCell>{formatCurrency(row.balance)}</TableCell>
+          {rows.length === 0 ? (
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={6} className="text-text-secondary">
+                No billing or payment activity for this customer.
+              </TableCell>
             </TableRow>
-          ))}
+          ) : (
+            rows.map((row, index) => (
+              <TableRow key={`${row.ref}-${index}`}>
+                <TableCell>{row.date}</TableCell>
+                <TableCell>{row.ref}</TableCell>
+                <TableCell>{row.description}</TableCell>
+                <TableCell>{row.debit ? formatCurrency(row.debit) : '—'}</TableCell>
+                <TableCell>{row.credit ? formatCurrency(row.credit) : '—'}</TableCell>
+                <TableCell>{formatCurrency(row.balance)}</TableCell>
+              </TableRow>
+            ))
+          )}
         </TableBody>
       </Table>
 
@@ -158,22 +162,24 @@ export function SOAPage() {
         <Card>
           <CardContent className="pt-4">
             <p className="text-sm text-text-secondary">Total Charges</p>
-            <p className="text-xl font-semibold">{formatCurrency(totalCharges)}</p>
+            <p className="text-xl font-semibold">{formatCurrency(totals.totalDebit)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4">
             <p className="text-sm text-text-secondary">Total Payments</p>
-            <p className="text-xl font-semibold">{formatCurrency(totalPayments)}</p>
+            <p className="text-xl font-semibold">{formatCurrency(totals.totalCredit)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4">
             <p className="text-sm text-text-secondary">Outstanding Balance</p>
-            <p className="text-xl font-semibold text-maroon">{formatCurrency(outstanding)}</p>
+            <p className="text-xl font-semibold text-maroon">
+              {formatCurrency(totals.outstanding)}
+            </p>
           </CardContent>
         </Card>
       </div>
     </div>
-  );
+  )
 }

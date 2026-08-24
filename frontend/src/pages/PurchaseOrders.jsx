@@ -18,6 +18,7 @@ import {
 import { EmptyState, TableFilters } from "@/components/ui/table-filters";
 import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { useDemo } from "@/context/DemoContext";
+import { useTransactions } from "@/context/TransactionContext";
 import { formatCurrency } from "@/lib/format";
 import { filterByDateRange } from "@/lib/dateFilter";
 import { getStatusDisplay } from "@/lib/status";
@@ -25,7 +26,8 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 function PurchaseOrdersPage() {
-  const { state, getSupplierName, showToast } = useDemo();
+  const { showToast } = useDemo();
+  const { purchaseOrders, loading, createReceiving } = useTransactions();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [search, setSearch] = useState("");
@@ -34,11 +36,11 @@ function PurchaseOrdersPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [viewId, setViewId] = useState(null);
   const filtered = useMemo(() => {
-    let list = state.purchaseOrders;
+    let list = purchaseOrders;
     const q = search.toLowerCase();
     if (q) {
       list = list.filter(
-        (po) => po.id.toLowerCase().includes(q) || getSupplierName(po.supplierId).toLowerCase().includes(q) || (po.referenceQuotationId?.toLowerCase().includes(q) ?? false)
+        (po) => po.id.toLowerCase().includes(q) || (po.supplierName ?? "").toLowerCase().includes(q) || (po.referenceQuotationNo?.toLowerCase().includes(q) ?? false) || (po.referenceQuotationId?.toLowerCase().includes(q) ?? false)
       );
     }
     if (statusFilter !== "all") {
@@ -46,19 +48,25 @@ function PurchaseOrdersPage() {
     }
     list = filterByDateRange(list, dateFrom, dateTo, "date");
     return list;
-  }, [state.purchaseOrders, search, statusFilter, dateFrom, dateTo, getSupplierName]);
-  const viewPo = viewId ? state.purchaseOrders.find((p) => p.id === viewId) : null;
+  }, [purchaseOrders, search, statusFilter, dateFrom, dateTo]);
+  const viewPo = viewId ? purchaseOrders.find((p) => p.id === viewId) : null;
   const openDetail = (id) => {
     if (isMobile) navigate(`/purchase-order/${id}`);
     else setViewId(id);
   };
-  const receiveItems = (poId) => {
-    const po = state.purchaseOrders.find((p) => p.id === poId);
+  const receiveItems = async (poId) => {
+    const po = purchaseOrders.find((p) => p.id === poId);
     if (po?.status === "fully_received") {
       showToast("info", "All items have been received.");
       return;
     }
-    navigate(`/inventory/receiving?po=${poId}`);
+    try {
+      await createReceiving(poId);
+      showToast("success", "Receiving created.");
+      navigate(`/inventory/receiving?po=${poId}`);
+    } catch (caught) {
+      showToast("error", caught?.message ?? "Could not create receiving.");
+    }
   };
   return /* @__PURE__ */ jsxs("div", { children: [
     /* @__PURE__ */ jsx(
@@ -75,10 +83,10 @@ function PurchaseOrdersPage() {
         active: statusFilter,
         onChange: setStatusFilter,
         tabs: [
-          { key: "all", label: "All", count: state.purchaseOrders.length },
-          { key: "pending", label: "Pending", count: state.purchaseOrders.filter((p) => p.status === "pending").length },
-          { key: "approved", label: "Approved", count: state.purchaseOrders.filter((p) => p.status === "approved").length },
-          { key: "fully_received", label: "Completed", count: state.purchaseOrders.filter((p) => p.status === "fully_received").length }
+          { key: "all", label: "All", count: purchaseOrders.length },
+          { key: "pending", label: "Pending", count: purchaseOrders.filter((p) => p.status === "pending").length },
+          { key: "approved", label: "Approved", count: purchaseOrders.filter((p) => p.status === "approved").length },
+          { key: "fully_received", label: "Completed", count: purchaseOrders.filter((p) => p.status === "fully_received").length }
         ]
       }
     ),
@@ -103,10 +111,10 @@ function PurchaseOrdersPage() {
           return {
             id: po.id,
             title: po.id,
-            subtitle: getSupplierName(po.supplierId),
+            subtitle: po.supplierName,
             badge: { label: st.label, variant: st.variant },
             fields: [
-              { label: "Date", value: po.date },
+              { label: "Date", value: po.displayDate ?? po.date },
               { label: "Amount", value: formatCurrency(po.total) }
             ],
             onClick: () => openDetail(po.id)
@@ -126,9 +134,9 @@ function PurchaseOrdersPage() {
             const st = getStatusDisplay(po.status);
             return /* @__PURE__ */ jsxs(TableRow, { children: [
               /* @__PURE__ */ jsx(TableCell, { children: /* @__PURE__ */ jsx(TableLink, { onClick: () => openDetail(po.id), children: po.id }) }),
-              /* @__PURE__ */ jsx(TableCell, { children: po.referenceQuotationId ?? "\u2014" }),
-              /* @__PURE__ */ jsx(TableCell, { children: getSupplierName(po.supplierId) }),
-              /* @__PURE__ */ jsx(TableCell, { children: po.date }),
+              /* @__PURE__ */ jsx(TableCell, { children: po.referenceQuotationNo ?? po.referenceQuotationId ?? "\u2014" }),
+              /* @__PURE__ */ jsx(TableCell, { children: po.supplierName }),
+              /* @__PURE__ */ jsx(TableCell, { children: po.displayDate ?? po.date }),
               /* @__PURE__ */ jsx(TableCell, { children: formatCurrency(po.total) }),
               /* @__PURE__ */ jsx(TableCell, { children: /* @__PURE__ */ jsx(Badge, { variant: st.variant, children: st.label }) }),
               /* @__PURE__ */ jsx(TableCell, { className: TABLE_ACTIONS_CELL_CLASS, children: /* @__PURE__ */ jsx(
@@ -155,17 +163,17 @@ function PurchaseOrdersPage() {
         /* @__PURE__ */ jsxs("div", { children: [
           /* @__PURE__ */ jsx("span", { className: "text-text-secondary", children: "Reference:" }),
           " ",
-          viewPo.referenceQuotationId ?? "\u2014"
+          viewPo.referenceQuotationNo ?? viewPo.referenceQuotationId ?? "\u2014"
         ] }),
         /* @__PURE__ */ jsxs("div", { children: [
           /* @__PURE__ */ jsx("span", { className: "text-text-secondary", children: "Supplier:" }),
           " ",
-          getSupplierName(viewPo.supplierId)
+          viewPo.supplierName
         ] }),
         /* @__PURE__ */ jsxs("div", { children: [
           /* @__PURE__ */ jsx("span", { className: "text-text-secondary", children: "Date:" }),
           " ",
-          viewPo.date
+          viewPo.displayDate ?? viewPo.date
         ] }),
         /* @__PURE__ */ jsxs("div", { children: [
           /* @__PURE__ */ jsx("span", { className: "text-text-secondary", children: "Total:" }),

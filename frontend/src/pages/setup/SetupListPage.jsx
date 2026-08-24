@@ -18,9 +18,34 @@ import {
 } from '@/components/ui/table'
 import { useDemo } from '@/context/DemoContext'
 import { getStatusDisplay } from '@/lib/status'
+import { Eye, EyeOff } from 'lucide-react'
 
 function emptyForm(fields) {
   return Object.fromEntries(fields.map((field) => [field.key, '']))
+}
+
+function resolveSelectOptions(field, optionSources = {}) {
+  if (field.options?.length) {
+    return field.options.map((option) => ({
+      value: option,
+      label: option,
+    }))
+  }
+
+  const sourceRows = optionSources[field.optionSource] ?? []
+
+  return sourceRows
+    .filter((row) => row.status !== 'Inactive')
+    .map((row) => ({
+      value: String(row[field.optionValueKey ?? 'id'] ?? ''),
+      label: row[field.optionLabelKey ?? 'name'] ?? row.name ?? row.id,
+    }))
+}
+
+function formatStockQuantity(value) {
+  const qty = Number(value ?? 0)
+  if (!Number.isFinite(qty)) return '0'
+  return Number.isInteger(qty) ? String(qty) : qty.toFixed(2)
 }
 
 export function SetupListPage({
@@ -34,6 +59,9 @@ export function SetupListPage({
   rowIdKey = 'id',
   statusKey = 'status',
   searchPlaceholder = 'Search...',
+  loading = false,
+  loadError = null,
+  optionSources = {},
   onAdd,
   onEdit,
   onDelete,
@@ -44,7 +72,12 @@ export function SetupListPage({
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(() => emptyForm(formFields))
+  const [visiblePasswords, setVisiblePasswords] = useState({})
+  const [submitting, setSubmitting] = useState(false)
   const [deleteId, setDeleteId] = useState(null)
+
+  const isFieldRequired = (field) =>
+    field.required || (field.requiredOnCreate && editingId == null)
 
   const statusOptions = useMemo(() => {
     const values = [...new Set(rows.map((row) => row[statusKey]).filter(Boolean))]
@@ -63,12 +96,18 @@ export function SetupListPage({
   const openAddModal = () => {
     setEditingId(null)
     setForm(emptyForm(formFields))
+    setVisiblePasswords({})
     setModalOpen(true)
   }
 
   const openEditModal = (row) => {
     setEditingId(row[rowIdKey])
-    setForm(Object.fromEntries(formFields.map((field) => [field.key, row[field.key] ?? ''])))
+    setForm(
+      Object.fromEntries(
+        formFields.map((field) => [field.key, String(row[field.key] ?? '')]),
+      ),
+    )
+    setVisiblePasswords({})
     setModalOpen(true)
   }
 
@@ -76,41 +115,66 @@ export function SetupListPage({
     setModalOpen(false)
     setEditingId(null)
     setForm(emptyForm(formFields))
+    setVisiblePasswords({})
   }
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
 
     for (const field of formFields) {
-      if (field.required && !String(form[field.key] ?? '').trim()) {
+      const isRequired = isFieldRequired(field)
+
+      if (isRequired && !String(form[field.key] ?? '').trim()) {
         showToast('error', `${field.label} is required.`)
         return
       }
     }
 
     const payload = Object.fromEntries(
-      formFields.map((field) => [field.key, String(form[field.key] ?? '').trim()]),
+      formFields
+        .map((field) => [field.key, String(form[field.key] ?? '').trim()])
+        .filter(([key, value]) => {
+          if (key === 'password' && editingId != null && !value) {
+            return false
+          }
+          return true
+        }),
     )
 
-    if (editingId != null) {
-      onEdit?.(editingId, payload)
-      showToast('success', `${title.replace(' Setup', '')} updated successfully.`)
-    } else {
-      onAdd?.(payload)
-      showToast('success', `${title.replace(' Setup', '')} added successfully.`)
+    setSubmitting(true)
+
+    try {
+      if (editingId != null) {
+        await onEdit?.(editingId, payload)
+        showToast('success', `${title.replace(' Setup', '')} updated successfully.`)
+      } else {
+        await onAdd?.(payload)
+        showToast('success', `${title.replace(' Setup', '')} added successfully.`)
+      }
+
+      closeModal()
+    } catch (caught) {
+      showToast('error', caught?.message ?? 'Could not save the record.')
+    } finally {
+      setSubmitting(false)
     }
-
-    closeModal()
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (deleteId == null) return
-    onDelete?.(deleteId)
-    showToast('success', 'Record deactivated successfully.')
-    setDeleteId(null)
+
+    try {
+      await onDelete?.(deleteId)
+      showToast('success', 'Record deactivated successfully.')
+      setDeleteId(null)
+    } catch (caught) {
+      showToast('error', caught?.message ?? 'Could not deactivate the record.')
+    }
   }
 
-  const modalTitle = editingId ? `Edit ${title.replace(' Setup', '')}` : actionLabel.replace(/^\+ /, '')
+  const modalTitle = editingId
+    ? `Edit ${title.replace(' Setup', '')}`
+    : actionLabel.replace(/^\+ /, '')
 
   return (
     <div>
@@ -120,7 +184,9 @@ export function SetupListPage({
         breadcrumbs={breadcrumbs}
         action={
           formFields.length > 0 ? (
-            <Button onClick={openAddModal}>{actionLabel}</Button>
+            <Button onClick={openAddModal} disabled={loading}>
+              {actionLabel}
+            </Button>
           ) : null
         }
       />
@@ -136,7 +202,15 @@ export function SetupListPage({
             statusOptions={statusOptions}
           />
 
-          {filtered.length === 0 ? (
+          {loadError ? (
+            <p className="mb-4 rounded-md bg-error-bg px-3 py-2 text-sm text-error-text">
+              {loadError}
+            </p>
+          ) : null}
+
+          {loading ? (
+            <p className="py-10 text-center text-sm text-text-secondary">Loading records…</p>
+          ) : filtered.length === 0 ? (
             <EmptyState message="No records found." />
           ) : (
             <div className="overflow-x-auto">
@@ -158,6 +232,20 @@ export function SetupListPage({
                             <Badge variant={getStatusDisplay(row[col.key]).variant}>
                               {row[col.key]}
                             </Badge>
+                          ) : col.key === 'stock' ? (
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold tabular-nums">
+                                {formatStockQuantity(row.stock)}
+                              </span>
+                              {row.unit ? (
+                                <span className="text-xs text-text-secondary">{row.unit}</span>
+                              ) : null}
+                              {row.stockStatus ? (
+                                <Badge variant={getStatusDisplay(row.stockStatus).variant}>
+                                  {row.stockStatus}
+                                </Badge>
+                              ) : null}
+                            </div>
                           ) : (
                             row[col.key]
                           )}
@@ -183,45 +271,93 @@ export function SetupListPage({
       </Card>
 
       <Modal open={modalOpen} onClose={closeModal} title={modalTitle} size="md">
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
           <div className="grid gap-4 sm:grid-cols-2">
-            {formFields.map((field) => (
-              <FormField
-                key={field.key}
-                label={field.label}
-                className={field.type === 'textarea' ? 'sm:col-span-2' : undefined}
-              >
-                {field.type === 'select' ? (
-                  <select
-                    value={form[field.key]}
-                    onChange={(e) => setForm((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                    className="flex h-9 w-full rounded-md border border-border-input bg-surface px-3 text-sm text-text-primary focus-visible:border-maroon focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-maroon-light"
-                    required={field.required}
-                  >
-                    <option value="">Select...</option>
-                    {field.options?.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <Input
-                    type={field.type ?? 'text'}
-                    value={form[field.key]}
-                    onChange={(e) => setForm((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                    required={field.required}
-                  />
-                )}
-              </FormField>
-            ))}
+            {formFields.map((field) => {
+              const selectOptions = resolveSelectOptions(field, optionSources)
+
+              return (
+                <FormField
+                  key={field.key}
+                  label={field.label}
+                  className={field.className ?? (field.type === 'textarea' ? 'sm:col-span-2' : undefined)}
+                >
+                  {field.type === 'select' ? (
+                    <select
+                      value={form[field.key]}
+                      onChange={(event) =>
+                        setForm((prev) => ({ ...prev, [field.key]: event.target.value }))
+                      }
+                      className="flex h-9 w-full rounded-md border border-border-input bg-surface px-3 text-sm text-text-primary focus-visible:border-maroon focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-maroon-light"
+                      required={isFieldRequired(field)}
+                      disabled={submitting}
+                    >
+                      <option value="">Select...</option>
+                      {selectOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : field.type === 'password' ? (
+                    <div className="relative">
+                      <Input
+                        type={visiblePasswords[field.key] ? 'text' : 'password'}
+                        value={form[field.key]}
+                        onChange={(event) =>
+                          setForm((prev) => ({ ...prev, [field.key]: event.target.value }))
+                        }
+                        required={isFieldRequired(field)}
+                        autoComplete={editingId == null ? 'new-password' : 'off'}
+                        className="pr-10"
+                        disabled={submitting}
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setVisiblePasswords((prev) => ({
+                            ...prev,
+                            [field.key]: !prev[field.key],
+                          }))
+                        }
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-maroon"
+                        aria-label={visiblePasswords[field.key] ? 'Hide password' : 'Show password'}
+                      >
+                        {visiblePasswords[field.key] ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  ) : (
+                    <Input
+                      type={field.type ?? 'text'}
+                      value={form[field.key]}
+                      onChange={(event) =>
+                        setForm((prev) => ({ ...prev, [field.key]: event.target.value }))
+                      }
+                      required={isFieldRequired(field)}
+                      autoComplete={
+                        field.key === 'username' && editingId == null
+                          ? 'off'
+                          : (field.autoComplete ?? 'off')
+                      }
+                      disabled={submitting}
+                    />
+                  )}
+                </FormField>
+              )
+            })}
           </div>
 
           <div className="flex justify-end gap-2 border-t border-border pt-4">
-            <Button type="button" variant="secondary" onClick={closeModal}>
+            <Button type="button" variant="secondary" onClick={closeModal} disabled={submitting}>
               Cancel
             </Button>
-            <Button type="submit">{editingId ? 'Save Changes' : 'Add Record'}</Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? 'Saving…' : editingId ? 'Save Changes' : 'Add Record'}
+            </Button>
           </div>
         </form>
       </Modal>

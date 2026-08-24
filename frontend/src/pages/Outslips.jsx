@@ -1,12 +1,12 @@
-import { jsx, jsxs } from "react/jsx-runtime";
-import { StatusTabs } from "@/components/layout/Breadcrumbs";
-import { PageHeader } from "@/components/layout/PageHeader";
-import { TransactionWorkflow } from "@/components/workflow/TransactionWorkflow";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { TABLE_ACTIONS_CELL_CLASS, TABLE_ACTIONS_HEAD_CLASS, TableActions } from "@/components/ui/action-menu";
-import { Modal } from "@/components/ui/modal";
+import { StatusTabs } from '@/components/layout/Breadcrumbs'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { TABLE_ACTIONS_CELL_CLASS, TABLE_ACTIONS_HEAD_CLASS, TableActions } from '@/components/ui/action-menu'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { FormField } from '@/components/ui/input'
+import { Modal } from '@/components/ui/modal'
+import { ResponsiveTable } from '@/components/ui/responsive-table'
 import {
   Table,
   TableBody,
@@ -14,177 +14,363 @@ import {
   TableHead,
   TableHeader,
   TableLink,
-  TableRow
-} from "@/components/ui/table";
-import { EmptyState, TableFilters } from "@/components/ui/table-filters";
-import { ResponsiveTable } from "@/components/ui/responsive-table";
-import { useDemo } from "@/context/DemoContext";
-import { filterByDateRange } from "@/lib/dateFilter";
-import { getStatusDisplay } from "@/lib/status";
-import { useIsMobile } from "@/hooks/useIsMobile";
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-const STATUS_ORDER = ["pending", "approved", "for_dispatch", "released"];
-function OutslipsPage() {
+  TableRow,
+} from '@/components/ui/table'
+import { EmptyState, TableFilters } from '@/components/ui/table-filters'
+import { useDemo } from '@/context/DemoContext'
+import { useTransactions } from '@/context/TransactionContext'
+import { useIsMobile } from '@/hooks/useIsMobile'
+import { useSetupResource } from '@/hooks/useSetupResource'
+import { filterByDateRange } from '@/lib/dateFilter'
+import { getStatusDisplay } from '@/lib/status'
+import { useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+
+const STATUS_ORDER = ['pending', 'approved', 'for_dispatch', 'released']
+
+export function OutslipsPage() {
+  const { showToast } = useDemo()
   const {
-    state,
-    getCustomerName,
+    outslips,
+    receivings,
+    loading,
+    createOutslip,
     approveOutslip,
     forDispatchOutslip,
-    createDeliveryFromOutslip
-  } = useDemo();
-  const navigate = useNavigate();
-  const isMobile = useIsMobile();
-  const [search, setSearch] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [statusTab, setStatusTab] = useState("all");
-  const [viewId, setViewId] = useState(null);
-  const [dispatchId, setDispatchId] = useState(null);
-  const counts = useMemo(() => ({
-    pending: state.outslips.filter((o) => o.status === "pending").length,
-    approved: state.outslips.filter((o) => o.status === "approved").length,
-    for_dispatch: state.outslips.filter((o) => o.status === "for_dispatch" || o.status === "released").length,
-    all: state.outslips.length
-  }), [state.outslips]);
+    createDeliveryFromOutslip,
+  } = useTransactions()
+  const { rows: customers } = useSetupResource('customers')
+  const navigate = useNavigate()
+  const isMobile = useIsMobile()
+  const [searchParams] = useSearchParams()
+  const receivingFromUrl = searchParams.get('receiving')
+
+  const [search, setSearch] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [statusTab, setStatusTab] = useState('all')
+  const [viewId, setViewId] = useState(null)
+  const [dispatchId, setDispatchId] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [createOpen, setCreateOpen] = useState(Boolean(receivingFromUrl))
+  const [createForm, setCreateForm] = useState({
+    customerId: '',
+    receivingId: receivingFromUrl ?? '',
+  })
+
+  const linkedReceiving = createForm.receivingId
+    ? receivings.find(
+        (r) => r.id === createForm.receivingId || r.dbId === String(createForm.receivingId),
+      )
+    : null
+
+  const counts = useMemo(
+    () => ({
+      pending: outslips.filter((o) => o.status === 'pending').length,
+      approved: outslips.filter((o) => o.status === 'approved').length,
+      for_dispatch: outslips.filter((o) => o.status === 'for_dispatch' || o.status === 'released')
+        .length,
+      all: outslips.length,
+    }),
+    [outslips],
+  )
+
   const filtered = useMemo(() => {
-    let list = [...state.outslips];
-    const q = search.toLowerCase();
+    let list = [...outslips]
+    const q = search.toLowerCase()
     if (q) {
       list = list.filter(
-        (o) => o.id.toLowerCase().includes(q) || getCustomerName(o.customerId).toLowerCase().includes(q)
-      );
+        (o) =>
+          o.id.toLowerCase().includes(q) ||
+          (o.customerName ?? '').toLowerCase().includes(q),
+      )
     }
-    if (statusTab !== "all") {
-      if (statusTab === "for_dispatch") {
-        list = list.filter((o) => o.status === "for_dispatch" || o.status === "released");
+    if (statusTab !== 'all') {
+      if (statusTab === 'for_dispatch') {
+        list = list.filter((o) => o.status === 'for_dispatch' || o.status === 'released')
       } else {
-        list = list.filter((o) => o.status === statusTab);
+        list = list.filter((o) => o.status === statusTab)
       }
     }
-    list = filterByDateRange(list, dateFrom, dateTo, "date");
-    list.sort((a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status));
-    return list;
-  }, [state.outslips, search, statusTab, dateFrom, dateTo, getCustomerName]);
-  const viewOs = viewId ? state.outslips.find((o) => o.id === viewId) : null;
+    list = filterByDateRange(list, dateFrom, dateTo, 'date')
+    list.sort((a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status))
+    return list
+  }, [outslips, search, statusTab, dateFrom, dateTo])
+
+  const viewOs = viewId ? outslips.find((o) => o.id === viewId) : null
+  const completedReceivings = receivings.filter((r) => r.status === 'completed')
+
   const openDetail = (id) => {
-    if (isMobile) navigate(`/outslip/${id}`);
-    else setViewId(id);
-  };
-  const handleCreateDR = (osId) => {
-    const drId = createDeliveryFromOutslip(osId);
-    if (drId) navigate("/delivery-receipt");
-  };
-  return /* @__PURE__ */ jsxs("div", { children: [
-    /* @__PURE__ */ jsx(
-      PageHeader,
-      {
-        title: "Outslip",
-        description: "Manage outgoing items linked to purchase orders.",
-        breadcrumbs: ["Transaction", "Outslip"]
-      }
-    ),
-    /* @__PURE__ */ jsx(
-      StatusTabs,
-      {
-        active: statusTab,
-        onChange: setStatusTab,
-        tabs: [
-          { key: "all", label: "All", count: counts.all },
-          { key: "pending", label: "Pending", count: counts.pending },
-          { key: "approved", label: "Approved", count: counts.approved },
-          { key: "for_dispatch", label: "For Dispatch", count: counts.for_dispatch }
-        ]
-      }
-    ),
-    /* @__PURE__ */ jsx(TableFilters, { search, onSearchChange: setSearch, searchPlaceholder: "Search outslips...", showDateRange: true, dateFrom, dateTo, onDateFromChange: setDateFrom, onDateToChange: setDateTo }),
-    /* @__PURE__ */ jsx(
-      ResponsiveTable,
-      {
-        emptyMessage: "No outslips found.",
-        mobileItems: filtered.map((o) => {
-          const st = getStatusDisplay(o.status === "released" ? "for_dispatch" : o.status);
-          const itemCount = o.items.reduce((s, i) => s + i.quantity, 0);
+    if (isMobile) navigate(`/outslip/${id}`)
+    else setViewId(id)
+  }
+
+  const handleCreate = async () => {
+    if (!createForm.customerId) {
+      showToast('error', 'Select a customer.')
+      return
+    }
+    if (!createForm.receivingId && !linkedReceiving) {
+      showToast('error', 'Select a completed receiving to create an outslip.')
+      return
+    }
+
+    setBusy(true)
+    try {
+      const receiving = linkedReceiving
+      const created = await createOutslip({
+        customerId: createForm.customerId,
+        receivingId: receiving?.dbId ?? createForm.receivingId,
+      })
+      showToast('success', `Outslip ${created?.id ?? ''} created.`)
+      setCreateOpen(false)
+      setCreateForm({ customerId: '', receivingId: '' })
+      if (created?.id) setViewId(created.id)
+    } catch (caught) {
+      showToast('error', caught?.message ?? 'Could not create outslip.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleApprove = async (id) => {
+    setBusy(true)
+    try {
+      await approveOutslip(id)
+      showToast('success', 'Outslip approved.')
+    } catch (caught) {
+      showToast('error', caught?.message ?? 'Could not approve outslip.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleDispatch = async (id) => {
+    setBusy(true)
+    try {
+      await forDispatchOutslip(id)
+      showToast('success', 'Outslip marked for dispatch. Inventory has been updated.')
+      setDispatchId(null)
+    } catch (caught) {
+      showToast('error', caught?.message ?? 'Could not mark for dispatch.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleCreateDR = async (osId) => {
+    setBusy(true)
+    try {
+      const drId = await createDeliveryFromOutslip(osId)
+      showToast('success', 'Delivery Receipt created successfully.')
+      if (drId) navigate('/delivery-receipt')
+    } catch (caught) {
+      showToast('error', caught?.message ?? 'Could not create delivery receipt.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div>
+      <PageHeader
+        title="Outslip"
+        description="Outgoing stock to customers. Posts inventory OUT on dispatch."
+        breadcrumbs={['Transaction', 'Outslip']}
+        action={
+          <Button
+            onClick={() => {
+              setCreateForm({
+                customerId: '',
+                receivingId: receivingFromUrl ?? '',
+              })
+              setCreateOpen(true)
+            }}
+          >
+            New Outslip
+          </Button>
+        }
+      />
+
+      {loading ? (
+        <p className="mb-4 text-sm text-text-secondary">Loading outslips…</p>
+      ) : null}
+
+      <StatusTabs
+        active={statusTab}
+        onChange={setStatusTab}
+        tabs={[
+          { key: 'all', label: 'All', count: counts.all },
+          { key: 'pending', label: 'Pending', count: counts.pending },
+          { key: 'approved', label: 'Approved', count: counts.approved },
+          { key: 'for_dispatch', label: 'For Dispatch', count: counts.for_dispatch },
+        ]}
+      />
+
+      <TableFilters
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search outslips..."
+        showDateRange
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        onDateFromChange={setDateFrom}
+        onDateToChange={setDateTo}
+      />
+
+      <ResponsiveTable
+        emptyMessage="No outslips found."
+        mobileItems={filtered.map((o) => {
+          const st = getStatusDisplay(o.status === 'released' ? 'for_dispatch' : o.status)
+          const itemCount = (o.items ?? []).reduce((s, i) => s + i.quantity, 0)
           return {
             id: o.id,
             title: o.id,
-            subtitle: getCustomerName(o.customerId),
+            subtitle: o.customerName || o.customerId,
             badge: { label: st.label, variant: st.variant },
             fields: [
-              { label: "Date", value: o.date },
-              { label: "Items", value: `${itemCount} units` }
+              { label: 'Date', value: o.displayDate || o.date },
+              { label: 'Items', value: `${itemCount} units` },
             ],
-            onClick: () => openDetail(o.id)
-          };
-        }),
-        desktop: /* @__PURE__ */ jsxs(Table, { children: [
-          /* @__PURE__ */ jsx(TableHeader, { children: /* @__PURE__ */ jsxs(TableRow, { className: "hover:bg-transparent", children: [
-            /* @__PURE__ */ jsx(TableHead, { children: "Outslip No." }),
-            /* @__PURE__ */ jsx(TableHead, { children: "Reference" }),
-            /* @__PURE__ */ jsx(TableHead, { children: "Customer" }),
-            /* @__PURE__ */ jsx(TableHead, { children: "Date" }),
-            /* @__PURE__ */ jsx(TableHead, { children: "Items" }),
-            /* @__PURE__ */ jsx(TableHead, { children: "Status" }),
-            /* @__PURE__ */ jsx(TableHead, { className: TABLE_ACTIONS_HEAD_CLASS, children: "Actions" })
-          ] }) }),
-          /* @__PURE__ */ jsx(TableBody, { children: filtered.length === 0 ? /* @__PURE__ */ jsx(TableRow, { className: "hover:bg-transparent", children: /* @__PURE__ */ jsx(TableCell, { colSpan: 7, children: /* @__PURE__ */ jsx(EmptyState, {}) }) }) : filtered.map((o) => {
-            const st = getStatusDisplay(o.status === "released" ? "for_dispatch" : o.status);
-            const itemCount = o.items.reduce((s, i) => s + i.quantity, 0);
-            return /* @__PURE__ */ jsxs(TableRow, { children: [
-              /* @__PURE__ */ jsx(TableCell, { children: /* @__PURE__ */ jsx(TableLink, { onClick: () => openDetail(o.id), children: o.id }) }),
-              /* @__PURE__ */ jsx(TableCell, { children: o.referencePoId ?? "\u2014" }),
-              /* @__PURE__ */ jsx(TableCell, { children: getCustomerName(o.customerId) }),
-              /* @__PURE__ */ jsx(TableCell, { children: o.date }),
-              /* @__PURE__ */ jsxs(TableCell, { children: [
-                itemCount,
-                " items"
-              ] }),
-              /* @__PURE__ */ jsx(TableCell, { children: /* @__PURE__ */ jsx(Badge, { variant: st.variant, children: st.label }) }),
-              /* @__PURE__ */ jsx(TableCell, { className: TABLE_ACTIONS_CELL_CLASS, children: /* @__PURE__ */ jsx(
-                TableActions,
-                {
-                  onPrint: () => window.print()
-                }
-              ) })
-            ] }, o.id);
-          }) })
-        ] })
-      }
-    ),
-    /* @__PURE__ */ jsx("div", { className: "mt-6", children: /* @__PURE__ */ jsx(TransactionWorkflow, { quotationId: "QTN-00001" }) }),
-    /* @__PURE__ */ jsx(Modal, { open: !!viewOs, onClose: () => setViewId(null), title: "Outslip Details", size: "md", children: viewOs && /* @__PURE__ */ jsxs("div", { className: "space-y-3 text-sm", children: [
-      /* @__PURE__ */ jsxs("p", { children: [
-        /* @__PURE__ */ jsx("strong", { children: viewOs.id }),
-        " \u2014 ",
-        getCustomerName(viewOs.customerId)
-      ] }),
-      /* @__PURE__ */ jsxs("p", { children: [
-        "Reference: ",
-        viewOs.referencePoId ?? "\u2014"
-      ] }),
-      /* @__PURE__ */ jsx("ul", { className: "list-disc pl-5", children: viewOs.items.map((i) => /* @__PURE__ */ jsxs("li", { children: [
-        i.productName,
-        " \xD7 ",
-        i.quantity
-      ] }, i.productId)) }),
-      viewOs.status === "approved" && /* @__PURE__ */ jsx(Button, { onClick: () => setDispatchId(viewOs.id), children: "For Dispatch" }),
-      (viewOs.status === "for_dispatch" || viewOs.status === "released") && /* @__PURE__ */ jsx(Button, { onClick: () => handleCreateDR(viewOs.id), children: "Create Delivery Receipt" })
-    ] }) }),
-    /* @__PURE__ */ jsx(
-      ConfirmDialog,
-      {
-        open: !!dispatchId,
-        onClose: () => setDispatchId(null),
-        title: "For Dispatch",
-        message: "Mark this outslip ready for dispatch? Inventory will be updated.",
-        confirmLabel: "Confirm",
-        onConfirm: () => {
-          if (dispatchId) forDispatchOutslip(dispatchId);
+            onClick: () => openDetail(o.id),
+          }
+        })}
+        desktop={
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Outslip No.</TableHead>
+                <TableHead>Reference</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Items</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className={TABLE_ACTIONS_HEAD_CLASS}>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.length === 0 ? (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={7}>
+                    <EmptyState />
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filtered.map((o) => {
+                  const st = getStatusDisplay(o.status === 'released' ? 'for_dispatch' : o.status)
+                  const itemCount = (o.items ?? []).reduce((s, i) => s + i.quantity, 0)
+                  return (
+                    <TableRow key={o.id}>
+                      <TableCell>
+                        <TableLink onClick={() => openDetail(o.id)}>{o.id}</TableLink>
+                      </TableCell>
+                      <TableCell>{o.receivingId ? `RCV #${o.receivingId}` : '—'}</TableCell>
+                      <TableCell>{o.customerName || o.customerId}</TableCell>
+                      <TableCell>{o.displayDate || o.date}</TableCell>
+                      <TableCell>{itemCount} items</TableCell>
+                      <TableCell>
+                        <Badge variant={st.variant}>{st.label}</Badge>
+                      </TableCell>
+                      <TableCell className={TABLE_ACTIONS_CELL_CLASS}>
+                        <TableActions onPrint={() => window.print()} />
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
+              )}
+            </TableBody>
+          </Table>
         }
-      }
-    )
-  ] });
+      />
+
+      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="New Outslip" size="md">
+        <div className="space-y-4">
+          <FormField label="Customer">
+            <select
+              className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
+              value={createForm.customerId}
+              onChange={(e) => setCreateForm({ ...createForm, customerId: e.target.value })}
+            >
+              <option value="">Select customer…</option>
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="From Receiving (completed)">
+            <select
+              className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
+              value={
+                linkedReceiving?.dbId ??
+                linkedReceiving?.id ??
+                createForm.receivingId
+              }
+              onChange={(e) => setCreateForm({ ...createForm, receivingId: e.target.value })}
+            >
+              <option value="">Select receiving…</option>
+              {completedReceivings.map((r) => (
+                <option key={r.id} value={r.dbId ?? r.id}>
+                  {r.id} — {r.supplierName || 'Receiving'}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          {linkedReceiving ? (
+            <p className="text-xs text-text-secondary">
+              Items: {(linkedReceiving.items ?? []).map((i) => i.productName).join(', ') || '—'}
+            </p>
+          ) : null}
+          <Button disabled={busy} onClick={handleCreate}>
+            {busy ? 'Creating…' : 'Create Outslip'}
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal open={!!viewOs} onClose={() => setViewId(null)} title="Outslip Details" size="md">
+        {viewOs ? (
+          <div className="space-y-3 text-sm">
+            <p>
+              <strong>{viewOs.id}</strong> — {viewOs.customerName || viewOs.customerId}
+            </p>
+            <p>Reference: {viewOs.receivingId ? `RCV #${viewOs.receivingId}` : '—'}</p>
+            <ul className="list-disc pl-5">
+              {(viewOs.items ?? []).map((i) => (
+                <li key={i.productId}>
+                  {i.productName} × {i.quantity}
+                </li>
+              ))}
+            </ul>
+            {viewOs.status === 'pending' ? (
+              <Button disabled={busy} onClick={() => handleApprove(viewOs.id)}>
+                Approve
+              </Button>
+            ) : null}
+            {viewOs.status === 'approved' ? (
+              <Button disabled={busy} onClick={() => setDispatchId(viewOs.id)}>
+                For Dispatch
+              </Button>
+            ) : null}
+            {(viewOs.status === 'for_dispatch' || viewOs.status === 'released') ? (
+              <Button disabled={busy} onClick={() => handleCreateDR(viewOs.id)}>
+                Create Delivery Receipt
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
+
+      <ConfirmDialog
+        open={!!dispatchId}
+        onClose={() => setDispatchId(null)}
+        title="For Dispatch"
+        message="Mark this outslip ready for dispatch? Inventory will be updated."
+        confirmLabel="Confirm"
+        onConfirm={() => {
+          if (dispatchId) handleDispatch(dispatchId)
+        }}
+      />
+    </div>
+  )
 }
-export {
-  OutslipsPage
-};

@@ -1,8 +1,9 @@
-import { jsx, jsxs } from "react/jsx-runtime";
-import { AccomplishmentReport } from "@/components/documents/AccomplishmentReport";
-import { PageHeader } from "@/components/layout/PageHeader";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { PageHeader } from '@/components/layout/PageHeader'
+import { TABLE_ACTIONS_CELL_CLASS, TABLE_ACTIONS_HEAD_CLASS, TableActions } from '@/components/ui/action-menu'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { FormField, Input } from '@/components/ui/input'
+import { Modal } from '@/components/ui/modal'
 import {
   Table,
   TableBody,
@@ -10,175 +11,212 @@ import {
   TableHead,
   TableHeader,
   TableLink,
-  TableRow
-} from "@/components/ui/table";
+  TableRow,
+} from '@/components/ui/table'
+import { EmptyState } from '@/components/ui/table-filters'
+import { useDemo } from '@/context/DemoContext'
+import { useSetupResource } from '@/hooks/useSetupResource'
 import {
-  accomplishmentReports
-} from "@/data/accomplishmentReports";
-import { optimizeImageFile } from "@/lib/optimizeImage";
-import { IMAGES_PER_PAGE, pageCountForImages } from "@/lib/reportPages";
-import { Printer, Upload } from "lucide-react";
-import { useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { useErp } from "@/data/erpStore";
-const statusLabel = {
-  approved: "Approved",
-  pending: "Pending",
-  draft: "Draft"
-};
-function AccomplishmentReportsPage() {
-  const [params] = useSearchParams();
-  const { deliveryReceipts } = useErp();
-  const linkedReceipt = deliveryReceipts.find((row) => row.id === params.get("dr"));
-  const [selectedId, setSelectedId] = useState(accomplishmentReports[0].id);
-  const [uploadedImages, setUploadedImages] = useState([]);
-  const [isOptimizing, setIsOptimizing] = useState(false);
-  const [uploadError, setUploadError] = useState(null);
-  const selectedReport = accomplishmentReports.find((report) => report.id === selectedId);
-  const previewReport = useMemo(() => {
-    if (!selectedReport) return void 0;
-    return {
-      ...selectedReport,
-      projectName: linkedReceipt?.project ?? selectedReport.projectName,
-      location: linkedReceipt?.destination ?? selectedReport.location,
-      remarks: linkedReceipt ? `From ${linkedReceipt.id} / ${linkedReceipt.outslipId} / ${linkedReceipt.poId}. Customer: ${linkedReceipt.customer}.` : selectedReport.remarks,
-      images: [...selectedReport.images, ...uploadedImages]
-    };
-  }, [selectedReport, uploadedImages, linkedReceipt]);
-  const imageCount = previewReport?.images.length ?? 0;
-  const pageCount = pageCountForImages(imageCount);
-  function revokeUploaded(images) {
-    images.forEach((image) => {
-      if (image.src.startsWith("blob:")) {
-        URL.revokeObjectURL(image.src);
-      }
-    });
-  }
-  function handleSelectReport(id) {
-    setUploadedImages((current) => {
-      revokeUploaded(current);
-      return [];
-    });
-    setUploadError(null);
-    setSelectedId(id);
-  }
-  async function handleUpload(event) {
-    const files = Array.from(event.target.files ?? []);
-    event.target.value = "";
-    if (files.length === 0) return;
-    setIsOptimizing(true);
-    setUploadError(null);
+  createAccomplishment,
+  fetchAccomplishments,
+  updateAccomplishment,
+} from '@/lib/accomplishmentApi'
+import { getStatusDisplay } from '@/lib/status'
+import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+
+export function AccomplishmentReportsPage() {
+  const { showToast } = useDemo()
+  const { rows: projects, loading: projectsLoading } = useSetupResource('projects')
+  const navigate = useNavigate()
+  const [reports, setReports] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [form, setForm] = useState({
+    projectId: '',
+    date: new Date().toISOString().slice(0, 10),
+    remarks: '',
+    status: 'pending',
+  })
+
+  const refresh = useCallback(async () => {
+    setLoading(true)
     try {
-      const optimizedImages = [];
-      try {
-        for (const [index, file] of files.entries()) {
-          const optimizedBlob = await optimizeImageFile(file);
-          optimizedImages.push({
-            id: `upload-${Date.now()}-${index}`,
-            src: URL.createObjectURL(optimizedBlob),
-            alt: file.name.replace(/\.[^.]+$/, "")
-          });
-        }
-        setUploadedImages((current) => [...current, ...optimizedImages]);
-      } catch {
-        revokeUploaded(optimizedImages);
-        throw new Error("optimize-failed");
-      }
-    } catch {
-      setUploadError(
-        "One or more pictures could not be optimized. Please try a JPG or PNG photo."
-      );
+      const data = await fetchAccomplishments()
+      setReports(data.filter((row) => row.status !== 'inactive'))
+    } catch (caught) {
+      showToast('error', caught?.message ?? 'Could not load accomplishment reports.')
+      setReports([])
     } finally {
-      setIsOptimizing(false);
+      setLoading(false)
+    }
+  }, [showToast])
+
+  useEffect(() => {
+    refresh()
+  }, [refresh])
+
+  const openPrint = (reportId) => {
+    navigate(`/reports/accomplishment/${reportId}/preview`)
+  }
+
+  const handleCreate = async () => {
+    if (!form.projectId) {
+      showToast('error', 'Select a project.')
+      return
+    }
+
+    setBusy(true)
+    try {
+      const payload = await createAccomplishment({
+        projectId: Number(form.projectId),
+        date: form.date || undefined,
+        remarks: form.remarks || undefined,
+        status: form.status,
+      })
+      showToast('success', `Report ${payload.data?.id ?? ''} created.`)
+      setCreateOpen(false)
+      setForm({
+        projectId: '',
+        date: new Date().toISOString().slice(0, 10),
+        remarks: '',
+        status: 'pending',
+      })
+      await refresh()
+      if (payload.data?.id) openPrint(payload.data.id)
+    } catch (caught) {
+      showToast('error', caught?.message ?? 'Could not create report.')
+    } finally {
+      setBusy(false)
     }
   }
-  function handlePrint() {
-    window.print();
+
+  const handleApprove = async (report) => {
+    setBusy(true)
+    try {
+      await updateAccomplishment(report.id, { status: 'approved' })
+      showToast('success', 'Report approved.')
+      await refresh()
+    } catch (caught) {
+      showToast('error', caught?.message ?? 'Could not update report.')
+    } finally {
+      setBusy(false)
+    }
   }
-  return /* @__PURE__ */ jsxs("div", { children: [
-    /* @__PURE__ */ jsxs("div", { className: "no-print", children: [
-      /* @__PURE__ */ jsx(
-        PageHeader,
-        {
-          title: "Accomplishment Reports",
-          description: "Photos are resized before use, then placed in a 2\xD72 grid (maximum 4 per page).",
-          action: /* @__PURE__ */ jsxs(Button, { onClick: handlePrint, children: [
-            /* @__PURE__ */ jsx(Printer, { className: "h-4 w-4" }),
-            "Print / Save PDF"
-          ] })
-        }
-      ),
-      /* @__PURE__ */ jsxs(Table, { children: [
-        /* @__PURE__ */ jsx(TableHeader, { children: /* @__PURE__ */ jsxs(TableRow, { className: "hover:bg-transparent", children: [
-          /* @__PURE__ */ jsx(TableHead, { children: "Report No." }),
-          /* @__PURE__ */ jsx(TableHead, { children: "Project Name" }),
-          /* @__PURE__ */ jsx(TableHead, { children: "Date" }),
-          /* @__PURE__ */ jsx(TableHead, { children: "Pictures" }),
-          /* @__PURE__ */ jsx(TableHead, { children: "Status" })
-        ] }) }),
-        /* @__PURE__ */ jsx(TableBody, { children: accomplishmentReports.map((report) => {
-          const isSelected = report.id === selectedId;
-          const count = report.id === selectedId ? imageCount : report.images.length;
-          return /* @__PURE__ */ jsxs(
-            TableRow,
-            {
-              className: isSelected ? "bg-maroon-light hover:bg-maroon-light" : void 0,
-              children: [
-                /* @__PURE__ */ jsx(TableCell, { children: /* @__PURE__ */ jsx(TableLink, { onClick: () => handleSelectReport(report.id), children: report.id }) }),
-                /* @__PURE__ */ jsx(TableCell, { children: report.projectName }),
-                /* @__PURE__ */ jsx(TableCell, { children: report.date }),
-                /* @__PURE__ */ jsx(TableCell, { children: count }),
-                /* @__PURE__ */ jsx(TableCell, { children: /* @__PURE__ */ jsx(Badge, { variant: report.status, children: statusLabel[report.status] }) })
-              ]
-            },
-            report.id
-          );
-        }) })
-      ] }),
-      previewReport && /* @__PURE__ */ jsxs("div", { className: "mb-4 mt-6 flex flex-wrap items-center justify-between gap-3", children: [
-        /* @__PURE__ */ jsxs("p", { className: "text-sm text-text-secondary", children: [
-          "Previewing ",
-          previewReport.id,
-          ": ",
-          imageCount,
-          " picture",
-          imageCount === 1 ? "" : "s",
-          " across ",
-          pageCount,
-          " page",
-          pageCount === 1 ? "" : "s",
-          " (maximum ",
-          IMAGES_PER_PAGE,
-          " pictures per page).",
-          isOptimizing ? " Optimizing selected photos\u2026" : ""
-        ] }),
-        /* @__PURE__ */ jsxs(
-          "label",
-          {
-            className: `inline-flex cursor-pointer items-center gap-2 rounded-md border border-maroon bg-surface px-4 py-2 text-sm font-medium text-maroon hover:bg-maroon-light ${isOptimizing ? "pointer-events-none opacity-60" : ""}`,
-            children: [
-              /* @__PURE__ */ jsx(Upload, { className: "h-4 w-4" }),
-              isOptimizing ? "Optimizing\u2026" : "Upload pictures",
-              /* @__PURE__ */ jsx(
-                "input",
-                {
-                  type: "file",
-                  accept: "image/*",
-                  multiple: true,
-                  className: "sr-only",
-                  disabled: isOptimizing,
-                  onChange: handleUpload
-                }
+
+  return (
+    <div>
+      <PageHeader
+        title="Accomplishment Reports"
+        description="Project accomplishment reports with server-stored pictures."
+        action={<Button onClick={() => setCreateOpen(true)}>New Report</Button>}
+      />
+
+      {loading ? (
+        <p className="mb-4 text-sm text-text-secondary">Loading reports…</p>
+      ) : null}
+
+      <Table>
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            <TableHead>Report No.</TableHead>
+            <TableHead>Project Name</TableHead>
+            <TableHead>Date</TableHead>
+            <TableHead>Pictures</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead className={TABLE_ACTIONS_HEAD_CLASS}>Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {reports.length === 0 ? (
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={6}>
+                <EmptyState message="No accomplishment reports yet." />
+              </TableCell>
+            </TableRow>
+          ) : (
+            reports.map((report) => {
+              const st = getStatusDisplay(report.status)
+              return (
+                <TableRow key={report.id}>
+                  <TableCell>
+                    <TableLink onClick={() => openPrint(report.id)}>{report.id}</TableLink>
+                  </TableCell>
+                  <TableCell>{report.projectName}</TableCell>
+                  <TableCell>{report.displayDate || report.date}</TableCell>
+                  <TableCell>{report.images?.length ?? 0}</TableCell>
+                  <TableCell>
+                    <Badge variant={st.variant}>{st.label}</Badge>
+                  </TableCell>
+                  <TableCell className={TABLE_ACTIONS_CELL_CLASS}>
+                    <div className="flex items-center justify-center gap-2">
+                      {report.status !== 'approved' ? (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={busy}
+                          onClick={() => handleApprove(report)}
+                        >
+                          Approve
+                        </Button>
+                      ) : null}
+                      <TableActions onPrint={() => openPrint(report.id)} />
+                    </div>
+                  </TableCell>
+                </TableRow>
               )
-            ]
-          }
-        )
-      ] }),
-      uploadError && /* @__PURE__ */ jsx("p", { className: "mb-4 text-sm text-error-text", children: uploadError })
-    ] }),
-    previewReport && /* @__PURE__ */ jsx("div", { className: "report-preview-frame", children: /* @__PURE__ */ jsx(AccomplishmentReport, { report: previewReport }) })
-  ] });
+            })
+          )}
+        </TableBody>
+      </Table>
+
+      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="New Accomplishment Report" size="md">
+        <div className="space-y-4">
+          <FormField label="Project">
+            <select
+              className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
+              value={form.projectId}
+              disabled={projectsLoading}
+              onChange={(e) => setForm({ ...form, projectId: e.target.value })}
+            >
+              <option value="">Select project…</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Date">
+            <Input
+              type="date"
+              value={form.date}
+              onChange={(e) => setForm({ ...form, date: e.target.value })}
+            />
+          </FormField>
+          <FormField label="Remarks">
+            <Input
+              value={form.remarks}
+              onChange={(e) => setForm({ ...form, remarks: e.target.value })}
+            />
+          </FormField>
+          <FormField label="Status">
+            <select
+              className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
+              value={form.status}
+              onChange={(e) => setForm({ ...form, status: e.target.value })}
+            >
+              <option value="draft">Draft</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+            </select>
+          </FormField>
+          <Button disabled={busy} onClick={handleCreate}>
+            {busy ? 'Creating…' : 'Create Report'}
+          </Button>
+        </div>
+      </Modal>
+    </div>
+  )
 }
-export {
-  AccomplishmentReportsPage
-};

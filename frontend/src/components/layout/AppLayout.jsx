@@ -1,31 +1,53 @@
-import { jsx, jsxs } from "react/jsx-runtime";
-import { ToastContainer } from "@/components/ui/toast";
-import { useEffect, useState } from "react";
-import { Outlet, useLocation } from "react-router-dom";
-import { Header } from "./Header";
-import { Sidebar } from "./Sidebar";
+import { ToastContainer } from '@/components/ui/toast'
+import { useTransactions } from '@/context/TransactionContext'
+import { useEffect, useState } from 'react'
+import { Outlet, useLocation } from 'react-router-dom'
+import { Header } from './Header'
+import { Sidebar } from './Sidebar'
+
 function AppLayout() {
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const location = useLocation();
-  const isDetailRoute = /\/(quotations|purchase-order|outslip|delivery-receipt)\/[^/]+$/.test(location.pathname) && !location.pathname.endsWith("/preview");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const location = useLocation()
+  const { error, refreshAll } = useTransactions()
+  const isDetailRoute =
+    /\/(quotations|purchase-order|outslip|delivery-receipt)\/[^/]+$/.test(location.pathname) &&
+    !location.pathname.endsWith('/preview')
+
   useEffect(() => {
-    setMobileNavOpen(false);
-  }, [location.pathname]);
-  return /* @__PURE__ */ jsxs("div", { className: "min-h-screen bg-page", children: [
-    /* @__PURE__ */ jsx(Sidebar, { mobileOpen: mobileNavOpen, onMobileClose: () => setMobileNavOpen(false) }),
-    /* @__PURE__ */ jsxs("div", { className: "flex min-h-screen flex-col md:ml-[250px]", children: [
-      !isDetailRoute && /* @__PURE__ */ jsx(Header, { onMenuClick: () => setMobileNavOpen(true) }),
-      /* @__PURE__ */ jsx("main", { className: cnMain(isDetailRoute), children: /* @__PURE__ */ jsx(Outlet, {}) })
-    ] }),
-    /* @__PURE__ */ jsx(ToastContainer, {})
-  ] });
+    setMobileNavOpen(false)
+  }, [location.pathname])
+
+  return (
+    <div className="min-h-screen bg-page">
+      <Sidebar mobileOpen={mobileNavOpen} onMobileClose={() => setMobileNavOpen(false)} />
+      <div className="flex min-h-screen flex-col md:ml-[250px]">
+        {!isDetailRoute ? <Header onMenuClick={() => setMobileNavOpen(true)} /> : null}
+        <main className={cnMain(isDetailRoute)}>
+          {error ? (
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#DC2626]/30 bg-[#FEE2E2] px-3 py-2 text-sm text-[#DC2626]">
+              <span>{error}</span>
+              <button
+                type="button"
+                className="font-medium underline"
+                onClick={() => refreshAll()}
+              >
+                Retry
+              </button>
+            </div>
+          ) : null}
+          <Outlet />
+        </main>
+      </div>
+      <ToastContainer />
+    </div>
+  )
 }
+
 function cnMain(isDetailRoute) {
   if (isDetailRoute) {
-    return "flex-1 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] md:p-6";
+    return 'flex-1 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] md:p-6'
   }
-  return "flex-1 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] md:p-6 md:pb-6";
+  return 'flex-1 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] md:p-6 md:pb-6'
 }
-export {
-  AppLayout
-};
+
+export { AppLayout }

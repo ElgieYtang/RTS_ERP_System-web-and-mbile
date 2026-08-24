@@ -29,9 +29,17 @@ export function createSetupMutations(setState) {
     updateSetupUser: (id, data) => {
       setState((prev) => ({
         ...prev,
-        setupUsers: prev.setupUsers.map((user) =>
-          user.id === id ? { ...user, ...data } : user,
-        ),
+        setupUsers: prev.setupUsers.map((user) => {
+          if (user.id !== id) return user
+
+          const { password, ...rest } = data
+
+          return {
+            ...user,
+            ...rest,
+            ...(password ? { password } : {}),
+          }
+        }),
       }))
     },
     deactivateSetupUser: (id) => {

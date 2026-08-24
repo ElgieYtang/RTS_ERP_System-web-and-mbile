@@ -34,9 +34,9 @@ export function Header({ onMenuClick }) {
     }
   }, [menuOpen])
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setMenuOpen(false)
-    logout()
+    await logout()
     navigate('/login', { replace: true })
   }
 
@@ -46,7 +46,7 @@ export function Header({ onMenuClick }) {
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-surface px-4 sm:px-6">
+    <header className="app-shell-header sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-surface px-4 sm:px-6">
       <div className="flex min-w-0 items-center gap-2">
         <button
           type="button"
