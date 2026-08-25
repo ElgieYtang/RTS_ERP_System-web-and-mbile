@@ -61,3 +61,8 @@ Login with a `setup_users` account (e.g. **admin** / **p@ssw0rd**).
 ### M3
 - Outslips tab (approve pending → dispatch approved / inventory OUT)
 - Home count for outslips needing action
+
+### PDF export
+- On an accomplishment detail screen, tap the **PDF** icon (top right)
+- Android opens the share sheet — save to Files, email, WhatsApp, etc.
+- Layout matches the office print format (letterhead, info table, photos, signatures)

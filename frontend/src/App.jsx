@@ -20,6 +20,7 @@ import { QuotationsPage } from "@/pages/Quotations";
 import { ReceivingPage } from "@/pages/Receiving";
 import { ReportsPage } from "@/pages/Reports";
 import { SettingsPage } from "@/pages/Settings";
+import { ProfilePage } from "@/pages/Profile";
 import { SOAPage } from "@/pages/SOA";
 import { CustomerLedgerPage } from "@/pages/reports/CustomerLedgerPage";
 import { SupplierLedgerPage } from "@/pages/reports/SupplierLedgerPage";
@@ -72,6 +73,7 @@ function App() {
       /* @__PURE__ */ jsx(Route, { path: "setup/item", element: /* @__PURE__ */ jsx(ItemSetupPage, {}) }),
       /* @__PURE__ */ jsx(Route, { path: "setup/supplier", element: /* @__PURE__ */ jsx(SupplierSetupPage, {}) }),
       /* @__PURE__ */ jsx(Route, { path: "setup/customer", element: /* @__PURE__ */ jsx(CustomerSetupPage, {}) }),
+      /* @__PURE__ */ jsx(Route, { path: "profile", element: /* @__PURE__ */ jsx(ProfilePage, {}) }),
       /* @__PURE__ */ jsx(Route, { path: "settings", element: /* @__PURE__ */ jsx(SettingsPage, {}) }),
       /* @__PURE__ */ jsx(Route, { path: "document-preview", element: /* @__PURE__ */ jsx(DocumentPreviewPage, {}) }),
       /* @__PURE__ */ jsx(Route, { path: "reports/accomplishment", element: /* @__PURE__ */ jsx(AccomplishmentReportsPage, {}) }),

@@ -20,10 +20,19 @@ class SettingsController extends Controller
             'company_address' => 'Room 301E-3, Medalle Building, Fuente Osmeña, Cebu City 6000',
             'company_phone' => '(032) 345-2283 / +63 917 573 4911',
             'company_email' => 'lark.gel@gmail.com',
-            'user_name' => 'Admin',
-            'user_email' => 'admin@responsivcode.com',
             'date_format' => 'F j, Y',
             'paper_size' => 'A4',
+            'auto_open_preview' => true,
+            'timezone' => 'Asia/Manila',
+            'currency' => 'PHP',
+            'language' => 'en',
+            'notify_in_app' => true,
+            'notify_email' => false,
+            'notify_quotations' => true,
+            'notify_purchase_orders' => true,
+            'notify_receiving' => true,
+            'notify_deliveries' => true,
+            'notify_billing' => true,
         ];
     }
 
@@ -47,10 +56,19 @@ class SettingsController extends Controller
             'company_address' => ['nullable', 'string', 'max:500'],
             'company_phone' => ['nullable', 'string', 'max:255'],
             'company_email' => ['nullable', 'email', 'max:255'],
-            'user_name' => ['nullable', 'string', 'max:255'],
-            'user_email' => ['nullable', 'email', 'max:255'],
             'date_format' => ['nullable', 'string', 'max:50'],
             'paper_size' => ['nullable', 'string', 'max:20'],
+            'auto_open_preview' => ['nullable', 'boolean'],
+            'timezone' => ['nullable', 'string', 'max:80'],
+            'currency' => ['nullable', 'string', 'max:10'],
+            'language' => ['nullable', 'string', 'max:10'],
+            'notify_in_app' => ['nullable', 'boolean'],
+            'notify_email' => ['nullable', 'boolean'],
+            'notify_quotations' => ['nullable', 'boolean'],
+            'notify_purchase_orders' => ['nullable', 'boolean'],
+            'notify_receiving' => ['nullable', 'boolean'],
+            'notify_deliveries' => ['nullable', 'boolean'],
+            'notify_billing' => ['nullable', 'boolean'],
         ]);
 
         $current = Storage::disk('local')->exists(self::STORAGE_PATH)
