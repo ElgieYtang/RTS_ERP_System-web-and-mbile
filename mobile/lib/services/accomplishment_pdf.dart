@@ -4,22 +4,27 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
-/// Printable accomplishment report — mirrors the office web layout.
+import 'company_letterhead.dart';
+
+/// Printable accomplishment report — matches web `.ar-print` / office template.
 class AccomplishmentPdf {
   AccomplishmentPdf._();
 
   static const imagesPerPage = 4;
 
-  static const _companyName = 'RESPONSIVCODE TECHNOLOGY SOLUTIONS';
+  /// Accomplishment reports use the office address block (not quotation letterhead).
+  static const _companyName = CompanyLetterhead.name;
   static const _companyAddress =
       'RM301E-3 MEDALLE BLDG. FUENTE OSMEÑA CAPITOL SITE CEBU CITY';
   static const _companyPhone = '345-2283/09175734911';
-  static const _signatoryName = 'LARKE G. GELBOLINGO';
+  static const _signatoryName = CompanyLetterhead.signatoryName;
 
-  static const _pageMargin = pw.EdgeInsets.fromLTRB(34, 28, 34, 28);
+  static const _pageMargin = pw.EdgeInsets.fromLTRB(34, 28, 34, 34);
 
-  static final _maroon = PdfColor.fromInt(0xFF8B1E3F);
   static const _border = PdfColors.black;
+  static const _borderWidth = 1.0;
+  static const _cellPadding = pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5);
+  static final _borderSide = pw.BorderSide(color: _border, width: _borderWidth);
 
   static final _labelStyle = pw.TextStyle(
     fontSize: 9,
@@ -27,9 +32,16 @@ class AccomplishmentPdf {
   );
   static const _valueStyle = pw.TextStyle(fontSize: 9);
   static const _titleStyle = pw.TextStyle(
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: pw.FontWeight.bold,
+    letterSpacing: 0.5,
   );
+  static final _companyNameStyle = pw.TextStyle(
+    fontSize: 10,
+    fontWeight: pw.FontWeight.bold,
+    letterSpacing: 0.2,
+  );
+  static const _companyLineStyle = pw.TextStyle(fontSize: 7.5);
 
   static Future<Uint8List> build({
     required Map<String, dynamic> report,
@@ -74,11 +86,13 @@ class AccomplishmentPdf {
                   _letterhead(logoImage)
                 else
                   _continuedHeader(pageIndex + 1, pageCount),
-                if (isFirstPage) ...[
-                  pw.SizedBox(height: 10),
-                  _infoTable(report),
-                ],
-                pw.Expanded(child: _picturesSection(slice)),
+                if (isFirstPage) _infoTable(report),
+                pw.Expanded(
+                  child: _picturesSection(
+                    slice,
+                    attached: isFirstPage,
+                  ),
+                ),
                 if (isLastPage) ...[
                   pw.SizedBox(height: 14),
                   _signatureSection(report),
@@ -100,47 +114,37 @@ class AccomplishmentPdf {
         pw.Row(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.Image(logo, width: 52, height: 52),
-            pw.SizedBox(width: 10),
+            pw.Image(logo, width: 51, height: 51),
+            pw.SizedBox(width: 12),
             pw.Expanded(
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
                   pw.Text(
                     _companyName,
-                    style: _labelStyle.copyWith(
-                      fontSize: 11,
-                      color: _maroon,
-                    ),
+                    style: _companyNameStyle,
                   ),
                   pw.Text(
                     _companyAddress,
-                    style: const pw.TextStyle(fontSize: 8),
+                    style: _companyLineStyle,
                   ),
                   pw.Text(
                     _companyPhone,
-                    style: const pw.TextStyle(fontSize: 8),
+                    style: _companyLineStyle,
                   ),
                 ],
               ),
             ),
           ],
         ),
-        pw.SizedBox(height: 12),
-        pw.Container(height: 1, color: _border),
-        pw.SizedBox(height: 2),
-        pw.Container(height: 1, color: _border),
-        pw.SizedBox(height: 10),
+        pw.SizedBox(height: 14),
         pw.Center(
           child: pw.Text(
             'ACCOMPLISHMENT REPORT',
-            style: _titleStyle.copyWith(color: _maroon),
+            style: _titleStyle,
           ),
         ),
-        pw.SizedBox(height: 8),
-        pw.Container(height: 1, color: _border),
-        pw.SizedBox(height: 2),
-        pw.Container(height: 1, color: _border),
+        pw.SizedBox(height: 11),
       ],
     );
   }
@@ -152,7 +156,7 @@ class AccomplishmentPdf {
         pw.Center(
           child: pw.Text(
             'ACCOMPLISHMENT REPORT',
-            style: _titleStyle.copyWith(color: _maroon),
+            style: _titleStyle,
           ),
         ),
         pw.SizedBox(height: 4),
@@ -160,52 +164,60 @@ class AccomplishmentPdf {
           alignment: pw.Alignment.centerRight,
           child: pw.Text(
             'Page $page of $total',
-            style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+            style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey700),
           ),
         ),
-        pw.SizedBox(height: 8),
+        pw.SizedBox(height: 11),
       ],
     );
   }
 
   static pw.Widget _infoTable(Map<String, dynamic> report) {
-    String cell(String? value) => (value == null || value.isEmpty) ? ' ' : value;
+    String text(String? value) => (value == null || value.isEmpty) ? ' ' : value;
 
     return pw.Container(
       decoration: pw.BoxDecoration(
-        border: pw.Border.all(color: _border, width: 0.75),
+        border: pw.Border.all(color: _border, width: _borderWidth),
       ),
       child: pw.Column(
         children: [
           _infoRow(
             cells: [
-              _InfoCell('Project Name:', cell(report['projectName']?.toString()), 22, 78),
+              _InfoCell(11, _tableLabel('Project Name:')),
+              _InfoCell(39, _tableValue(text(report['projectName']?.toString()))),
             ],
-            bottom: true,
+            drawBottom: true,
           ),
           _infoRow(
             cells: [
-              _InfoCell('Location', cell(report['location']?.toString()), 22, 28),
-              _InfoCell('Remarks', cell(report['remarks']?.toString()), 18, 32),
+              _InfoCell(11, _tableLabel('Location')),
+              _InfoCell(14, _tableValue(text(report['location']?.toString()))),
+              _InfoCell(11, _tableLabel('Remarks')),
+              _InfoCell(14, _tableValue(text(report['remarks']?.toString()))),
             ],
-            bottom: true,
+            drawBottom: true,
           ),
           _infoRow(
             cells: [
+              _InfoCell(11, _tableLabel('Installation Report No:')),
               _InfoCell(
-                'Installation Report No:',
-                cell(report['installationReportNo']?.toString() ?? report['id']?.toString()),
-                30,
-                20,
-              ),
-              _InfoCell(
-                'Date:',
-                cell(report['displayDate']?.toString() ?? report['date']?.toString()),
                 14,
-                16,
+                _tableValue(
+                  text(
+                    report['installationReportNo']?.toString() ??
+                        report['id']?.toString(),
+                  ),
+                ),
+              ),
+              _InfoCell(11, _tableLabel('Date:')),
+              _InfoCell(
+                14,
+                _tableValue(
+                  text(report['displayDate']?.toString() ?? report['date']?.toString()),
+                ),
               ),
             ],
-            bottom: false,
+            drawBottom: false,
           ),
         ],
       ),
@@ -214,106 +226,114 @@ class AccomplishmentPdf {
 
   static pw.Widget _infoRow({
     required List<_InfoCell> cells,
-    required bool bottom,
+    required bool drawBottom,
   }) {
     return pw.Container(
       decoration: pw.BoxDecoration(
-        border: bottom
-            ? const pw.Border(bottom: pw.BorderSide(color: _border, width: 0.75))
-            : null,
+        border: pw.Border(
+          bottom: drawBottom ? _borderSide : pw.BorderSide.none,
+        ),
       ),
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          for (var i = 0; i < cells.length; i++) ...[
+          for (var i = 0; i < cells.length; i++)
             pw.Expanded(
-              flex: cells[i].labelFlex,
+              flex: cells[i].flex,
               child: pw.Container(
                 decoration: pw.BoxDecoration(
                   border: pw.Border(
-                    right: const pw.BorderSide(color: _border, width: 0.75),
+                    right: i < cells.length - 1 ? _borderSide : pw.BorderSide.none,
                   ),
                 ),
-                padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-                child: pw.Text(cells[i].label, style: _labelStyle),
+                padding: _cellPadding,
+                child: cells[i].child,
               ),
             ),
-            pw.Expanded(
-              flex: cells[i].valueFlex,
-              child: pw.Container(
-                decoration: i < cells.length - 1
-                    ? pw.BoxDecoration(
-                        border: pw.Border(
-                          right: const pw.BorderSide(color: _border, width: 0.75),
-                        ),
-                      )
-                    : null,
-                padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-                child: pw.Text(cells[i].value, style: _valueStyle),
-              ),
-            ),
-          ],
         ],
       ),
     );
   }
 
-  static pw.Widget _picturesSection(List<Uint8List> slots) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-      children: [
-        pw.Container(
-          width: double.infinity,
-          padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-          decoration: const pw.BoxDecoration(
-            border: pw.Border(
-              left: pw.BorderSide(color: _border, width: 0.75),
-              right: pw.BorderSide(color: _border, width: 0.75),
-              bottom: pw.BorderSide(color: _border, width: 0.75),
-            ),
-          ),
-          child: pw.Text('Pictures', style: _labelStyle),
-        ),
-        pw.Expanded(
-          child: pw.Column(
-            children: [
-              pw.Expanded(
-                child: pw.Row(
-                  crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-                  children: [
-                    pw.Expanded(child: _photoCell(slots[0])),
-                    pw.Expanded(child: _photoCell(slots[1])),
-                  ],
-                ),
-              ),
-              pw.Expanded(
-                child: pw.Row(
-                  crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-                  children: [
-                    pw.Expanded(child: _photoCell(slots[2], bottom: true)),
-                    pw.Expanded(child: _photoCell(slots[3], bottom: true)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
+  static pw.Widget _tableLabel(String text) {
+    return pw.Text(text, style: _labelStyle);
   }
 
-  static pw.Widget _photoCell(Uint8List bytes, {bool bottom = false}) {
+  static pw.Widget _tableValue(String text) {
+    return pw.Text(text, style: _valueStyle);
+  }
+
+  static pw.Widget _picturesSection(List<Uint8List> slots, {required bool attached}) {
     return pw.Container(
       decoration: pw.BoxDecoration(
         border: pw.Border(
-          left: const pw.BorderSide(color: _border, width: 0.75),
-          right: const pw.BorderSide(color: _border, width: 0.75),
+          left: const pw.BorderSide(color: _border, width: _borderWidth),
+          right: const pw.BorderSide(color: _border, width: _borderWidth),
+          bottom: const pw.BorderSide(color: _border, width: _borderWidth),
+          top: attached
+              ? pw.BorderSide.none
+              : const pw.BorderSide(color: _border, width: _borderWidth),
+        ),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+        children: [
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: const pw.BoxDecoration(
+              border: pw.Border(
+                bottom: pw.BorderSide(color: _border, width: _borderWidth),
+              ),
+            ),
+            child: pw.Text('Pictures', style: _labelStyle),
+          ),
+          pw.Expanded(
+            child: pw.Column(
+              children: [
+                pw.Expanded(
+                  child: pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                    children: [
+                      pw.Expanded(child: _photoCell(slots[0], right: true, bottom: true)),
+                      pw.Expanded(child: _photoCell(slots[1], bottom: true)),
+                    ],
+                  ),
+                ),
+                pw.Expanded(
+                  child: pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                    children: [
+                      pw.Expanded(child: _photoCell(slots[2], right: true)),
+                      pw.Expanded(child: _photoCell(slots[3])),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _photoCell(
+    Uint8List bytes, {
+    bool right = false,
+    bool bottom = false,
+  }) {
+    return pw.Container(
+      decoration: pw.BoxDecoration(
+        border: pw.Border(
+          right: right
+              ? const pw.BorderSide(color: _border, width: _borderWidth)
+              : pw.BorderSide.none,
           bottom: bottom
-              ? const pw.BorderSide(color: _border, width: 0.75)
+              ? const pw.BorderSide(color: _border, width: _borderWidth)
               : pw.BorderSide.none,
         ),
       ),
-      padding: const pw.EdgeInsets.all(4),
+      padding: const pw.EdgeInsets.all(3),
       child: bytes.isEmpty
           ? pw.SizedBox.expand()
           : pw.Center(
@@ -329,10 +349,10 @@ class AccomplishmentPdf {
     final preparedByPosition =
         report['preparedByPosition']?.toString() ?? 'PERSONNEL';
     final confirmedByLabel = report['confirmedByLabel']?.toString() ??
-        'Signature of Printed Name / Position';
+        'SIGNATURE OF PRINTED NAME/POSITION';
 
     return pw.Table(
-      border: pw.TableBorder.all(color: _border, width: 0.75),
+      border: pw.TableBorder.all(color: _border, width: _borderWidth),
       columnWidths: {
         0: const pw.FlexColumnWidth(),
         1: const pw.FlexColumnWidth(),
@@ -370,17 +390,18 @@ class AccomplishmentPdf {
         children: [
           pw.SizedBox(height: 40),
           pw.Text(
-            name,
+            name.toUpperCase(),
             style: pw.TextStyle(
-              fontSize: 10,
+              fontSize: 9,
               fontWeight: pw.FontWeight.bold,
               decoration: pw.TextDecoration.underline,
+              decorationThickness: 0.75,
             ),
           ),
           pw.SizedBox(height: 4),
           pw.Text(
             role.toUpperCase(),
-            style: const pw.TextStyle(fontSize: 8),
+            style: const pw.TextStyle(fontSize: 7.5),
           ),
         ],
       ),
@@ -396,7 +417,7 @@ class AccomplishmentPdf {
           pw.SizedBox(height: 40),
           pw.Text(
             label.toUpperCase(),
-            style: _labelStyle.copyWith(fontSize: 8),
+            style: _labelStyle.copyWith(fontSize: 7.5),
             textAlign: pw.TextAlign.center,
           ),
         ],
@@ -406,10 +427,8 @@ class AccomplishmentPdf {
 }
 
 class _InfoCell {
-  const _InfoCell(this.label, this.value, this.labelFlex, this.valueFlex);
+  const _InfoCell(this.flex, this.child);
 
-  final String label;
-  final String value;
-  final int labelFlex;
-  final int valueFlex;
+  final int flex;
+  final pw.Widget child;
 }

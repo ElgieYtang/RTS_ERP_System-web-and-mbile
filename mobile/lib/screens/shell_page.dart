@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../navigation/mobile_modules.dart';
 import '../services/api_client.dart';
 import '../state/auth_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/brand_logo.dart';
-import 'accomplishments_page.dart';
-import 'deliveries_page.dart';
+import '../widgets/transactions_drawer.dart';
 import 'home_page.dart';
-import 'outslips_page.dart';
-import 'receivings_page.dart';
 
 class ShellPage extends StatefulWidget {
   const ShellPage({super.key});
@@ -19,32 +17,53 @@ class ShellPage extends StatefulWidget {
 }
 
 class _ShellPageState extends State<ShellPage> {
-  int _index = 0;
   ApiClient? _api;
-  List<Widget> _pages = const [];
-
-  static const _titles = [
-    'Home',
-    'Receiving',
-    'Outslips',
-    'Deliveries',
-    'Accomplishments',
-  ];
+  final _homeKey = GlobalKey<HomePageState>();
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final api = context.read<ApiClient>();
-    if (!identical(_api, api)) {
-      _api = api;
-      _pages = [
-        HomePage(onOpenTab: (index) => setState(() => _index = index)),
-        ReceivingsPage(api: api),
-        OutslipsPage(api: api),
-        DeliveriesPage(api: api),
-        AccomplishmentsPage(api: api),
-      ];
+    _api = context.read<ApiClient>();
+  }
+
+  Future<void> _openModule(BuildContext context, MobileModule module) async {
+    final api = _api;
+    if (api == null) return;
+
+    final scaffold = Scaffold.maybeOf(context);
+    if (scaffold?.isDrawerOpen ?? false) {
+      Navigator.pop(context);
     }
+
+    final onModuleShell = ModalRoute.of(context)?.settings.name == 'module';
+
+    if (onModuleShell) {
+      await Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          settings: const RouteSettings(name: 'module'),
+          builder: (routeContext) => ModuleShell(
+            module: module,
+            api: api,
+            onOpenModule: _openModule,
+          ),
+        ),
+      );
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        settings: const RouteSettings(name: 'module'),
+        builder: (routeContext) => ModuleShell(
+          module: module,
+          api: api,
+          onOpenModule: _openModule,
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+    await _homeKey.currentState?.refreshCounts();
   }
 
   @override
@@ -53,7 +72,7 @@ class _ShellPageState extends State<ShellPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: BrandAppBarTitle(title: _titles[_index]),
+        title: const BrandAppBarTitle(title: 'Home'),
         actions: [
           PopupMenuButton<String>(
             icon: CircleAvatar(
@@ -93,52 +112,12 @@ class _ShellPageState extends State<ShellPage> {
           const SizedBox(width: 8),
         ],
       ),
-      body: IndexedStack(
-        index: _index,
-        children: _pages,
+      drawer: TransactionsDrawer(
+        onOpenModule: (module) => _openModule(context, module),
       ),
-      bottomNavigationBar: DecoratedBox(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 12,
-              offset: const Offset(0, -4),
-            ),
-          ],
-        ),
-        child: NavigationBar(
-          selectedIndex: _index,
-          onDestinationSelected: (value) => setState(() => _index = value),
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home_rounded),
-              label: 'Home',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.inventory_2_outlined),
-              selectedIcon: Icon(Icons.inventory_2_rounded),
-              label: 'Receiving',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.outbox_outlined),
-              selectedIcon: Icon(Icons.outbox_rounded),
-              label: 'Outslips',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.local_shipping_outlined),
-              selectedIcon: Icon(Icons.local_shipping_rounded),
-              label: 'Deliveries',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.photo_camera_outlined),
-              selectedIcon: Icon(Icons.photo_camera_rounded),
-              label: 'Reports',
-            ),
-          ],
-        ),
+      body: HomePage(
+        key: _homeKey,
+        onOpenModule: (module) => _openModule(context, module),
       ),
     );
   }

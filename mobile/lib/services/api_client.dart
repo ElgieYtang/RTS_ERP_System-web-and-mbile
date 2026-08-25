@@ -176,6 +176,17 @@ class ApiClient {
     return payload['data'] as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> getData(
+    String path, {
+    Map<String, String>? query,
+  }) async {
+    final payload = await request('GET', path, query: query) as Map<String, dynamic>;
+    final data = payload['data'];
+    if (data is Map<String, dynamic>) return data;
+    if (data is Map) return Map<String, dynamic>.from(data);
+    return {};
+  }
+
   Future<Map<String, dynamic>> post(String path, [Map<String, dynamic>? body]) async {
     final payload = await request('POST', path, body: body) as Map<String, dynamic>;
     return payload;

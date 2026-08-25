@@ -3,25 +3,26 @@ import 'package:flutter/material.dart';
 import '../services/api_client.dart';
 import '../services/api_errors.dart';
 import '../services/offline_cache.dart';
+import '../services/transaction_actions.dart';
+import '../services/transaction_lists.dart';
 import '../navigation/mobile_modules.dart';
 import '../navigation/transaction_detail_host.dart';
 import '../navigation/transaction_navigation.dart';
-import '../services/transaction_actions.dart';
-import '../services/transaction_lists.dart';
 import '../theme/app_theme.dart';
 import '../widgets/field_ui.dart';
-import '../widgets/transaction_workflows.dart';
+import '../widgets/print_document_button.dart';
+import 'add_quotation_page.dart';
 
-class OutslipsPage extends StatefulWidget {
-  const OutslipsPage({super.key, required this.api});
+class QuotationsPage extends StatefulWidget {
+  const QuotationsPage({super.key, required this.api});
 
   final ApiClient api;
 
   @override
-  State<OutslipsPage> createState() => _OutslipsPageState();
+  State<QuotationsPage> createState() => _QuotationsPageState();
 }
 
-class _OutslipsPageState extends State<OutslipsPage> {
+class _QuotationsPageState extends State<QuotationsPage> {
   bool _loading = true;
   bool _creating = false;
   bool _fromCache = false;
@@ -32,20 +33,12 @@ class _OutslipsPageState extends State<OutslipsPage> {
   List<Map<String, dynamic>> _rows = [];
   TransactionLists _lists = const TransactionLists();
 
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
   List<Map<String, dynamic>> get _visible {
     switch (_filter) {
       case 'action':
-        return _rows
-            .where((r) => r['status'] == 'pending' || r['status'] == 'approved')
-            .toList();
-      case 'ready':
-        return _rows.where((r) => r['status'] == 'for_dispatch').toList();
+        return _rows.where((r) => r['status'] == 'pending').toList();
+      case 'approved':
+        return _rows.where((r) => r['status'] == 'approved').toList();
       default:
         return _rows;
     }
@@ -60,12 +53,12 @@ class _OutslipsPageState extends State<OutslipsPage> {
     });
     try {
       final results = await Future.wait([
-        widget.api.getList('/outslips'),
+        widget.api.getList('/quotations'),
         TransactionLists.load(widget.api),
       ]);
       final data = results[0] as List<dynamic>;
       final lists = results[1] as TransactionLists;
-      await OfflineCache.saveList(OfflineCache.outslips, data);
+      await OfflineCache.saveList(OfflineCache.quotations, data);
       if (!mounted) return;
       setState(() {
         _rows = data.cast<Map<String, dynamic>>();
@@ -73,7 +66,7 @@ class _OutslipsPageState extends State<OutslipsPage> {
         _loading = false;
       });
     } catch (error) {
-      final cached = await OfflineCache.loadList(OfflineCache.outslips);
+      final cached = await OfflineCache.loadList(OfflineCache.quotations);
       if (!mounted) return;
       if (cached.rows.isNotEmpty) {
         setState(() {
@@ -94,19 +87,16 @@ class _OutslipsPageState extends State<OutslipsPage> {
 
   Future<void> _approve(Map<String, dynamic> row) async {
     if (_fromCache) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Offline')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Offline')));
       return;
     }
-
-    final id = row['dbId']?.toString() ?? row['id']?.toString();
-    if (id == null || _busyId != null) return;
+    final id = fieldRowId(row);
+    if (id.isEmpty || _busyId != null) return;
 
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Approve outslip?'),
+        title: const Text('Approve quotation?'),
         content: Text('Approve ${row['id'] ?? id}?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
@@ -118,11 +108,9 @@ class _OutslipsPageState extends State<OutslipsPage> {
 
     setState(() => _busyId = id);
     try {
-      await widget.api.post('/outslips/$id/approve');
+      await widget.api.put('/quotations/$id', {'status': 'approved'});
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Outslip approved.')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Quotation approved.')));
       await _load();
     } catch (error) {
       if (!mounted) return;
@@ -132,25 +120,22 @@ class _OutslipsPageState extends State<OutslipsPage> {
     }
   }
 
-  Future<void> _dispatch(Map<String, dynamic> row) async {
+  Future<void> _cancel(Map<String, dynamic> row) async {
     if (_fromCache) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Offline')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Offline')));
       return;
     }
-
-    final id = row['dbId']?.toString() ?? row['id']?.toString();
-    if (id == null || _busyId != null) return;
+    final id = fieldRowId(row);
+    if (id.isEmpty || _busyId != null) return;
 
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Dispatch outslip?'),
-        content: Text('Dispatch ${row['id'] ?? id}?'),
+        title: const Text('Cancel quotation?'),
+        content: Text('Cancel ${row['id'] ?? id}?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Dispatch')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Back')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Cancel')),
         ],
       ),
     );
@@ -158,11 +143,9 @@ class _OutslipsPageState extends State<OutslipsPage> {
 
     setState(() => _busyId = id);
     try {
-      await widget.api.post('/outslips/$id/dispatch');
+      await widget.api.post('/quotations/$id/cancel');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Outslip dispatched')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Quotation cancelled.')));
       await _load();
     } catch (error) {
       if (!mounted) return;
@@ -172,27 +155,85 @@ class _OutslipsPageState extends State<OutslipsPage> {
     }
   }
 
-  Future<void> _createDeliveryReceipt(Map<String, dynamic> row, {bool popCurrentRoute = false}) async {
+  Future<void> _convertToPo(Map<String, dynamic> row, {bool popCurrentRoute = false}) async {
     if (_fromCache) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Offline')));
       return;
     }
-    final id = fieldDbId(row);
+    final id = fieldRowId(row);
     if (id.isEmpty || _busyId != null) return;
+
+    List<Map<String, dynamic>> suppliers = [];
+    try {
+      suppliers = (await widget.api.getList('/setup/suppliers')).cast<Map<String, dynamic>>();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyApiError(error))));
+      return;
+    }
+
+    final active = suppliers.where((s) => s['status'] != 'Inactive').toList();
+    if (active.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No active suppliers found in setup.')),
+      );
+      return;
+    }
+
+    var supplierId = active.first['id']?.toString() ?? '';
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Convert to purchase order'),
+          content: DropdownButtonFormField<String>(
+            value: supplierId,
+            decoration: const InputDecoration(labelText: 'Supplier'),
+            items: active
+                .map(
+                  (s) => DropdownMenuItem(
+                    value: s['id']?.toString() ?? '',
+                    child: Text(s['name']?.toString() ?? 'Supplier'),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) => setDialogState(() => supplierId = value ?? supplierId),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Convert')),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || supplierId.isEmpty) return;
+
     setState(() => _busyId = id);
     try {
-      final created = await confirmCreateDeliveryReceipt(context, widget.api, row);
-      if (created != null) {
-        await _load();
+      final response = await widget.api.post('/quotations/$id/convert-to-po', {
+        'supplierId': int.parse(supplierId),
+      });
+      if (!mounted) return;
+      final po = recordFromPayload(response);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Purchase order created from quotation.')),
+      );
+      await _load();
+      if (po != null) {
         if (!mounted) return;
         await openCreatedTransaction(
           context,
           widget.api,
-          MobileModule.deliveries,
-          created,
+          MobileModule.purchaseOrders,
+          po,
           popCurrentRoute: popCurrentRoute,
         );
       }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyApiError(error))));
     } finally {
       if (mounted) setState(() => _busyId = null);
     }
@@ -204,22 +245,24 @@ class _OutslipsPageState extends State<OutslipsPage> {
       return;
     }
     if (_creating) return;
+
     setState(() => _creating = true);
     try {
-      final created = await showCreateOutslipDialog(context, widget.api);
-      if (created != null) {
+      final created = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => AddQuotationPage(api: widget.api)),
+      );
+      if (created == true) {
         await _load();
-        if (!mounted) return;
-        await openCreatedTransaction(
-          context,
-          widget.api,
-          MobileModule.outslips,
-          created,
-        );
       }
     } finally {
       if (mounted) setState(() => _creating = false);
     }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
   }
 
   @override
@@ -238,6 +281,7 @@ class _OutslipsPageState extends State<OutslipsPage> {
       ),
       body: RefreshIndicator(
         onRefresh: _load,
+        color: AppTheme.maroon,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(12),
@@ -245,8 +289,8 @@ class _OutslipsPageState extends State<OutslipsPage> {
           FieldFilterBar(
             value: _filter,
             options: const [
-              (id: 'action', label: 'Needs action'),
-              (id: 'ready', label: 'For dispatch'),
+              (id: 'action', label: 'Pending'),
+              (id: 'approved', label: 'Approved'),
               (id: 'all', label: 'All'),
             ],
             onChanged: (value) => setState(() => _filter = value),
@@ -255,29 +299,31 @@ class _OutslipsPageState extends State<OutslipsPage> {
           if (_error != null && !_fromCache) FieldErrorBanner(message: _error!, onRetry: _load),
           if (visible.isEmpty && (_error == null || _fromCache))
             FieldEmptyState(
-              icon: Icons.outbox_outlined,
-              title: _filter == 'action' ? 'No outslips needing action' : 'No outslips',
+              icon: Icons.request_quote_outlined,
+              title: _rows.isEmpty
+                  ? 'No quotations'
+                  : 'No ${_filter == 'approved' ? 'approved' : 'pending'} quotations',
+              subtitle: _rows.isNotEmpty && _filter != 'all'
+                  ? 'Try the All tab to see every quotation.'
+                  : null,
             ),
           ...visible.map((row) {
-            final id = row['dbId']?.toString() ?? row['id']?.toString() ?? '';
+            final id = fieldRowId(row);
             final status = row['status']?.toString() ?? '';
-            final itemCount = (row['items'] as List<dynamic>? ?? const []).length;
             final busy = _busyId == id;
-            final showApprove = canApproveOutslip(row);
-            final showDispatch = canDispatchOutslip(row);
-            final showCreateDr = canCreateDrFromOutslip(row, _lists);
+            final items = (row['items'] as List<dynamic>? ?? const []).length;
+            final showApprove = canApproveQuotation(row);
+            final showCancel = canCancelQuotation(row);
+            final showConvert = canConvertQuotation(row, _lists);
 
             return Card(
               child: InkWell(
-                onTap: () async {
-                  await pushTransactionDetail(
-                    context,
-                    widget.api,
-                    MobileModule.outslips,
-                    row,
-                  );
-                  await _load();
-                },
+                onTap: () => pushTransactionDetail(
+                  context,
+                  widget.api,
+                  MobileModule.quotations,
+                  row,
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Column(
@@ -287,7 +333,7 @@ class _OutslipsPageState extends State<OutslipsPage> {
                         children: [
                           Expanded(
                             child: Text(
-                              row['id']?.toString() ?? 'OS',
+                              row['id']?.toString() ?? 'QTN',
                               style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
                             ),
                           ),
@@ -295,33 +341,31 @@ class _OutslipsPageState extends State<OutslipsPage> {
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Text(row['customerName']?.toString().isNotEmpty == true
-                          ? row['customerName'].toString()
-                          : 'Customer —'),
+                      Text(row['customerName']?.toString() ?? 'Customer —'),
                       Text(
                         '${row['displayDate'] ?? row['date'] ?? '—'} · '
-                        'RCV: ${row['receivingId'] ?? '—'} · '
-                        '$itemCount item(s)',
+                        '${fieldFormatMoney(row['total'])} · $items item(s)',
                       ),
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          if (showApprove)
+                          if (showApprove) ...[
                             FilledButton(
                               onPressed: busy || _fromCache ? null : () => _approve(row),
-                              child: Text(busy ? '…' : 'Approve'),
+                              child: Text(busy ? 'Working…' : 'Approve'),
                             ),
-                          if (showDispatch)
-                            FilledButton(
-                              onPressed: busy || _fromCache ? null : () => _dispatch(row),
-                              child: Text(busy ? '…' : 'Dispatch'),
-                            ),
-                          if (showCreateDr)
-                            FilledButton(
-                              onPressed: busy || _fromCache ? null : () => _createDeliveryReceipt(row),
-                              child: Text(busy ? 'Working…' : 'Create DR'),
+                            if (showCancel)
+                              OutlinedButton(
+                                onPressed: busy || _fromCache ? null : () => _cancel(row),
+                                child: const Text('Cancel'),
+                              ),
+                          ],
+                          if (showConvert)
+                            FilledButton.tonal(
+                              onPressed: busy || _fromCache ? null : () => _convertToPo(row),
+                              child: const Text('Convert to PO'),
                             ),
                         ],
                       ),
@@ -338,37 +382,35 @@ class _OutslipsPageState extends State<OutslipsPage> {
   }
 }
 
-class OutslipDetailPage extends StatelessWidget {
-  const OutslipDetailPage({
+class QuotationDetailPage extends StatelessWidget {
+  const QuotationDetailPage({
     super.key,
-    required this.outslip,
+    required this.api,
+    required this.quotation,
     this.popAfterMutations = true,
     this.onApprove,
-    this.onDispatch,
-    this.onCreateDr,
+    this.onConvert,
+    this.onCancel,
   });
 
-  final Map<String, dynamic> outslip;
+  final ApiClient api;
+  final Map<String, dynamic> quotation;
   final bool popAfterMutations;
   final Future<void> Function()? onApprove;
-  final Future<void> Function()? onDispatch;
-  final Future<void> Function()? onCreateDr;
+  final Future<void> Function()? onConvert;
+  final Future<void> Function()? onCancel;
 
   @override
   Widget build(BuildContext context) {
-    final status = outslip['status']?.toString() ?? '';
-    final items = (outslip['items'] as List<dynamic>? ?? const [])
+    final items = (quotation['items'] as List<dynamic>? ?? const [])
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
-    final customer = outslip['customerName']?.toString().isNotEmpty == true
-        ? outslip['customerName'].toString()
-        : 'Customer —';
 
     return FieldDetailScaffold(
-      title: outslip['id']?.toString() ?? 'Outslip',
-      subtitle: customer,
-      status: status,
+      title: quotation['id']?.toString() ?? 'Quotation',
+      subtitle: quotation['customerName']?.toString() ?? 'Customer —',
+      status: quotation['status']?.toString(),
       actions: [
         if (onApprove != null)
           FilledButton(
@@ -376,36 +418,40 @@ class OutslipDetailPage extends StatelessWidget {
               await onApprove!();
               if (popAfterMutations && context.mounted) Navigator.pop(context);
             },
-            child: const Text('Approve outslip'),
+            child: const Text('Approve'),
           ),
-        if (onDispatch != null) ...[
+        if (onConvert != null) ...[
           if (onApprove != null) const SizedBox(height: 8),
-          FilledButton(
-            onPressed: () async {
-              await onDispatch!();
-              if (popAfterMutations && context.mounted) Navigator.pop(context);
-            },
-            child: const Text('Mark for dispatch'),
-          ),
-        ],
-        if (onCreateDr != null) ...[
-          if (onApprove != null || onDispatch != null) const SizedBox(height: 8),
           FilledButton.tonal(
             onPressed: () async {
-              await onCreateDr!();
+              await onConvert!();
             },
-            child: const Text('Create delivery receipt'),
+            child: const Text('Convert to PO'),
           ),
         ],
+        if (onCancel != null) ...[
+          if (onApprove != null || onConvert != null) const SizedBox(height: 8),
+          OutlinedButton(
+            onPressed: () async {
+              await onCancel!();
+              if (popAfterMutations && context.mounted) Navigator.pop(context);
+            },
+            child: const Text('Cancel quotation'),
+          ),
+        ],
+        const SizedBox(height: 8),
+        PrintDocumentButton(
+          onPrint: () => printQuotation(context, api, quotation),
+        ),
       ],
       children: [
         const SizedBox(height: 12),
         Text(
-          'Date: ${outslip['displayDate'] ?? outslip['date'] ?? '—'}',
+          'Date: ${quotation['displayDate'] ?? quotation['date'] ?? '—'}',
           style: const TextStyle(color: AppTheme.textSecondary),
         ),
         Text(
-          'Receiving ID: ${outslip['receivingId'] ?? '—'}',
+          'Total: ${fieldFormatMoney(quotation['total'])}',
           style: const TextStyle(color: AppTheme.textSecondary),
         ),
         const SizedBox(height: 16),

@@ -1,6 +1,6 @@
 # RTS ERP — Field Mobile (Flutter)
 
-Same Laravel API as the office web app. Field-first scope for Phase 8 v1.
+Same Laravel API as the office web app. Mobile mirrors the web **TRANSACTIONS** menu only (not Setup or Reports).
 
 ## Prerequisites
 
@@ -62,7 +62,34 @@ Login with a `setup_users` account (e.g. **admin** / **p@ssw0rd**).
 - Outslips tab (approve pending → dispatch approved / inventory OUT)
 - Home count for outslips needing action
 
+### M4 — Transactions (same as web sidebar)
+Matches web **TRANSACTIONS** section with the same workflow actions:
+
+| Step | Mobile actions |
+|------|----------------|
+| Quotation | **New**, approve, cancel, convert to PO |
+| Purchase order | Receive items → creates receiving |
+| Receiving | Confirm → **Create outslip** |
+| Outslip | **New**, approve, dispatch → **Create DR** |
+| Delivery receipt | Out for delivery, delivered → **Create billing** |
+| Billing | Record payment |
+| SOA | Generate by customer |
+| Accomplishments | **New**, approve, photos, PDF |
+
+Full chain: **Quotation → PO → Receiving → Outslip → DR → Billing → Payment** (same as web).
+
+**Action buttons hide after use** (same as web): e.g. **Receive items** disappears when an open receiving exists for that PO; **Convert to PO** hides after a PO is created; **Create outslip / DR / billing** hide once the next document exists; **Record payment** hides when paid.
+
+**Print / PDF** (detail screens or SOA): Quotation, Purchase order, Delivery receipt, SOA — same official A4 layout as web (letterhead, tables, signatures). Tap **Print / PDF** to share. Accomplishments use the **PDF** icon on the detail screen.
+
+**Not on mobile:** Setup and Reports (inventory ledger, etc.) — office web only.
+
+- **Home** + **drawer (☰)** list all transaction modules
+- Bottom tabs: Receiving, Outslips, Deliveries, Accomplishments
+
 ### PDF export
-- On an accomplishment detail screen, tap the **PDF** icon (top right)
+- **Accomplishments:** detail screen → **PDF** icon (top right)
+- **Transactions:** open a quotation, PO, delivery receipt detail → **Print / PDF** (matches web A4 format)
+- **SOA:** generate statement → **Print SOA PDF**
 - Android opens the share sheet — save to Files, email, WhatsApp, etc.
-- Layout matches the office print format (letterhead, info table, photos, signatures)
+- Layout uses the same letterhead and line-item table style as the office printouts

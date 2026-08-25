@@ -4,10 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:printing/printing.dart';
 
+import '../navigation/app_navigation.dart';
+import '../widgets/transactions_drawer.dart';
 import '../services/accomplishment_pdf.dart';
 import '../services/api_client.dart';
 import '../services/api_errors.dart';
 import '../services/offline_cache.dart';
+import '../services/transaction_actions.dart';
 import '../theme/app_theme.dart';
 import '../widgets/field_ui.dart';
 
@@ -171,6 +174,25 @@ class _AccomplishmentsPageState extends State<AccomplishmentsPage> {
     }
   }
 
+  Future<void> _approve(Map<String, dynamic> row) async {
+    if (_fromCache) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Offline')));
+      return;
+    }
+    final id = row['dbId']?.toString() ?? row['id']?.toString();
+    if (id == null) return;
+
+    try {
+      await widget.api.put('/accomplishments/$id', {'status': 'approved'});
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Report approved.')));
+      await _load();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyApiError(error))));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading && _rows.isEmpty && _error == null) {
@@ -198,6 +220,8 @@ class _AccomplishmentsPageState extends State<AccomplishmentsPage> {
               ),
             ..._rows.map((row) {
               final imageCount = (row['images'] as List<dynamic>? ?? const []).length;
+              final status = row['status']?.toString() ?? '';
+              final canApprove = canApproveAccomplishment(row) && !_fromCache;
               return Card(
                 child: ListTile(
                   title: Text(row['id']?.toString() ?? 'AR'),
@@ -206,7 +230,12 @@ class _AccomplishmentsPageState extends State<AccomplishmentsPage> {
                     '${row['displayDate'] ?? row['date'] ?? '—'} · $imageCount photo(s)',
                   ),
                   isThreeLine: true,
-                  trailing: FieldStatusChip(row['status']?.toString()),
+                  trailing: canApprove
+                      ? FilledButton(
+                          onPressed: () => _approve(row),
+                          child: const Text('Approve'),
+                        )
+                      : FieldStatusChip(status),
                   onTap: () async {
                     await Navigator.of(context).push(
                       MaterialPageRoute(
@@ -437,23 +466,26 @@ class _AccomplishmentDetailPageState extends State<AccomplishmentDetailPage> {
     final report = _report;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(report?['id']?.toString() ?? 'Accomplishment'),
-        actions: [
-          if (report != null)
-            IconButton(
-              onPressed: _exportingPdf ? null : _exportPdf,
-              tooltip: 'Download PDF',
-              icon: _exportingPdf
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.picture_as_pdf_outlined),
-            ),
-        ],
+      appBar: transactionAppBar(
+        context,
+        title: report?['id']?.toString() ?? 'Accomplishment',
+        extraActions: report == null
+            ? null
+            : [
+                IconButton(
+                  onPressed: _exportingPdf ? null : _exportPdf,
+                  tooltip: 'Download PDF',
+                  icon: _exportingPdf
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.picture_as_pdf_outlined),
+                ),
+              ],
       ),
+      drawer: moduleTransactionDrawer(context),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : report == null
