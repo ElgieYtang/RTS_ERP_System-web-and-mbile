@@ -750,7 +750,23 @@ input.login-field:-webkit-autofill:active {
 .quotation-print-page {
   display: flex;
   flex-direction: column;
+  align-items: center;
   padding-bottom: 24px;
+  --print-a4-width: 210mm;
+  --print-a4-height: 297mm;
+}
+
+@media screen and (max-width: 900px) {
+  .quotation-print-page {
+    --print-scale: min(1, calc((100vw - 32px) / 794px));
+  }
+
+  .quotation-print-page > .quotation-print,
+  .quotation-print-page > .ar-print {
+    transform: scale(var(--print-scale));
+    transform-origin: top center;
+    margin-bottom: calc(var(--print-a4-height) * (var(--print-scale) - 1));
+  }
 }
 
 .print-page-actions {
@@ -1430,6 +1446,8 @@ input.login-field:-webkit-autofill:active {
     border: none;
     box-shadow: none;
     page-break-after: always;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   .quotation-print__items th {
@@ -1444,7 +1462,15 @@ input.login-field:-webkit-autofill:active {
 
   .dr-print__reference,
   .dr-print__items th,
-  .dr-print__total-label {
+  .dr-print__total-label,
+  .soa-print__reference,
+  .soa-print__items th,
+  .soa-print__total-label,
+  .soa-print__total-currency,
+  .soa-print__total-value,
+  .soa-print__summary-label,
+  .soa-print__summary-currency,
+  .soa-print__summary-value {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }

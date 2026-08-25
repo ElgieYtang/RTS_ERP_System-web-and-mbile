@@ -3,8 +3,15 @@ import 'package:flutter/material.dart';
 import '../services/api_client.dart';
 import '../services/api_errors.dart';
 import '../services/offline_cache.dart';
+import '../navigation/mobile_modules.dart';
+import '../navigation/transaction_detail_host.dart';
+import '../navigation/transaction_navigation.dart';
+import '../services/transaction_actions.dart';
+import '../services/transaction_lists.dart';
 import '../theme/app_theme.dart';
 import '../widgets/field_ui.dart';
+import '../widgets/print_document_button.dart';
+import '../widgets/transaction_workflows.dart';
 
 class DeliveriesPage extends StatefulWidget {
   const DeliveriesPage({super.key, required this.api});
@@ -23,6 +30,7 @@ class _DeliveriesPageState extends State<DeliveriesPage> {
   String? _offlineLabel;
   String _filter = 'active';
   List<Map<String, dynamic>> _rows = [];
+  TransactionLists _lists = const TransactionLists();
 
   @override
   void initState() {
@@ -51,11 +59,17 @@ class _DeliveriesPageState extends State<DeliveriesPage> {
       _offlineLabel = null;
     });
     try {
-      final data = await widget.api.getList('/delivery-receipts');
+      final results = await Future.wait([
+        widget.api.getList('/delivery-receipts'),
+        TransactionLists.load(widget.api),
+      ]);
+      final data = results[0] as List<dynamic>;
+      final lists = results[1] as TransactionLists;
       await OfflineCache.saveList(OfflineCache.deliveries, data);
       if (!mounted) return;
       setState(() {
         _rows = data.cast<Map<String, dynamic>>();
+        _lists = lists;
         _loading = false;
       });
     } catch (error) {
@@ -119,6 +133,32 @@ class _DeliveriesPageState extends State<DeliveriesPage> {
     }
   }
 
+  Future<void> _createBilling(Map<String, dynamic> row, {bool popCurrentRoute = false}) async {
+    if (_fromCache) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Offline')));
+      return;
+    }
+    final id = fieldDbId(row);
+    if (id.isEmpty || _busyId != null) return;
+    setState(() => _busyId = id);
+    try {
+      final created = await confirmCreateBilling(context, widget.api, row);
+      if (created != null) {
+        await _load();
+        if (!mounted) return;
+        await openCreatedTransaction(
+          context,
+          widget.api,
+          MobileModule.billing,
+          created,
+          popCurrentRoute: popCurrentRoute,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busyId = null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading && _rows.isEmpty && _error == null) {
@@ -154,17 +194,18 @@ class _DeliveriesPageState extends State<DeliveriesPage> {
             final status = row['status']?.toString() ?? '';
             final itemCount = (row['items'] as List<dynamic>? ?? const []).length;
             final busy = _busyId == id;
+            final showOut = canMarkDeliveryOut(row);
+            final showDelivered = canMarkDeliveryDelivered(row);
+            final showBilling = canCreateBillingFromDelivery(row, _lists);
 
             return Card(
               child: InkWell(
                 onTap: () async {
-                  await Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => DeliveryDetailPage(
-                        delivery: row,
-                        onSetStatus: _fromCache ? null : (next) => _setStatus(row, next),
-                      ),
-                    ),
+                  await pushTransactionDetail(
+                    context,
+                    widget.api,
+                    MobileModule.deliveries,
+                    row,
                   );
                   await _load();
                 },
@@ -198,18 +239,23 @@ class _DeliveriesPageState extends State<DeliveriesPage> {
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          if (status == 'active')
+                          if (showOut)
                             FilledButton(
                               onPressed: busy || _fromCache
                                   ? null
                                   : () => _setStatus(row, 'out_for_delivery'),
                               child: Text(busy ? 'Updating…' : 'Out for delivery'),
                             ),
-                          if (status == 'out_for_delivery' || status == 'active')
+                          if (showDelivered)
                             FilledButton.tonal(
                               onPressed:
                                   busy || _fromCache ? null : () => _setStatus(row, 'delivered'),
                               child: const Text('Mark delivered'),
+                            ),
+                          if (showBilling)
+                            FilledButton(
+                              onPressed: busy || _fromCache ? null : () => _createBilling(row),
+                              child: Text(busy ? 'Working…' : 'Create billing'),
                             ),
                         ],
                       ),
@@ -228,12 +274,18 @@ class _DeliveriesPageState extends State<DeliveriesPage> {
 class DeliveryDetailPage extends StatelessWidget {
   const DeliveryDetailPage({
     super.key,
+    required this.api,
     required this.delivery,
-    required this.onSetStatus,
+    this.popAfterMutations = true,
+    this.onSetStatus,
+    this.onCreateBilling,
   });
 
+  final ApiClient api;
   final Map<String, dynamic> delivery;
+  final bool popAfterMutations;
   final Future<void> Function(String status)? onSetStatus;
+  final Future<void> Function()? onCreateBilling;
 
   @override
   Widget build(BuildContext context) {
@@ -250,28 +302,42 @@ class DeliveryDetailPage extends StatelessWidget {
       title: delivery['id']?.toString() ?? 'Delivery',
       subtitle: customer,
       status: status,
-      actions: onSetStatus == null
-          ? null
-          : [
-              if (status == 'active')
-                FilledButton(
-                  onPressed: () async {
-                    await onSetStatus!('out_for_delivery');
-                    if (context.mounted) Navigator.pop(context);
-                  },
-                  child: const Text('Out for delivery'),
-                ),
-              if (status == 'out_for_delivery' || status == 'active') ...[
-                if (status == 'active') const SizedBox(height: 8),
-                FilledButton.tonal(
-                  onPressed: () async {
-                    await onSetStatus!('delivered');
-                    if (context.mounted) Navigator.pop(context);
-                  },
-                  child: const Text('Mark delivered'),
-                ),
-              ],
-            ],
+      actions: [
+        if (onSetStatus != null && canMarkDeliveryOut(delivery))
+          FilledButton(
+            onPressed: () async {
+              await onSetStatus!('out_for_delivery');
+              if (popAfterMutations && context.mounted) Navigator.pop(context);
+            },
+            child: const Text('Out for delivery'),
+          ),
+        if (onSetStatus != null && canMarkDeliveryDelivered(delivery)) ...[
+          if (canMarkDeliveryOut(delivery)) const SizedBox(height: 8),
+          FilledButton.tonal(
+            onPressed: () async {
+              await onSetStatus!('delivered');
+              if (popAfterMutations && context.mounted) Navigator.pop(context);
+            },
+            child: const Text('Mark delivered'),
+          ),
+        ],
+        if (onCreateBilling != null) ...[
+          if (onSetStatus != null &&
+              (canMarkDeliveryOut(delivery) || canMarkDeliveryDelivered(delivery)))
+            const SizedBox(height: 8),
+          FilledButton(
+            onPressed: () async {
+              await onCreateBilling!();
+            },
+            child: const Text('Create billing'),
+          ),
+        ],
+        const SizedBox(height: 8),
+        PrintDocumentButton(
+          onPrint: () => printDeliveryReceipt(context, api, delivery),
+          label: 'Print delivery receipt',
+        ),
+      ],
       children: [
         const SizedBox(height: 12),
         Text(

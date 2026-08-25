@@ -3,8 +3,25 @@ import { cn } from '@/lib/utils'
 import { Bell } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
+function NotificationDot({ active, unread, status }) {
+  if (!active) return null
+
+  return (
+    <span
+      className={cn(
+        'mt-2 h-2.5 w-2.5 shrink-0 rounded-full',
+        unread ? 'bg-maroon ring-4 ring-maroon/15' : 'bg-border',
+        status === 'out_for_delivery' && unread && 'bg-amber-500 ring-amber-500/20',
+        status === 'active' && unread && 'animate-pulse',
+      )}
+      aria-hidden
+      title={unread ? 'Unread alert' : 'Seen alert'}
+    />
+  )
+}
+
 export function NotificationPanel({ open, onClose }) {
-  const { notifications, count, enabled, loading } = useNotifications()
+  const { notifications, count, totalCount, enabled, loading, markAsRead } = useNotifications()
 
   if (!open) return null
 
@@ -21,6 +38,10 @@ export function NotificationPanel({ open, onClose }) {
           {count > 0 ? (
             <span className="rounded-full bg-maroon px-2 py-0.5 text-[11px] font-semibold text-white">
               {count}
+            </span>
+          ) : totalCount > 0 ? (
+            <span className="rounded-full bg-border px-2 py-0.5 text-[11px] font-semibold text-text-secondary">
+              {totalCount}
             </span>
           ) : null}
         </div>
@@ -44,9 +65,9 @@ export function NotificationPanel({ open, onClose }) {
             Enable in settings
           </Link>
         </div>
-      ) : loading && count === 0 ? (
+      ) : loading && totalCount === 0 ? (
         <p className="px-4 py-6 text-sm text-text-secondary">Loading alerts…</p>
-      ) : count === 0 ? (
+      ) : totalCount === 0 ? (
         <p className="px-4 py-6 text-sm text-text-secondary">
           You&apos;re all caught up. No items need attention right now.
         </p>
@@ -56,14 +77,30 @@ export function NotificationPanel({ open, onClose }) {
             <li key={item.id} className="border-b border-border last:border-b-0">
               <Link
                 to={item.path}
-                onClick={onClose}
-                className="block px-4 py-3 transition-colors hover:bg-maroon-light"
+                onClick={() => {
+                  markAsRead(item.id)
+                  onClose()
+                }}
+                className={cn(
+                  'flex gap-3 px-4 py-3 transition-colors hover:bg-maroon-light',
+                  item.unread && 'bg-maroon-light/40',
+                )}
               >
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-maroon">
-                  {item.categoryLabel}
-                </p>
-                <p className="mt-0.5 text-sm font-medium text-text-primary">{item.title}</p>
-                <p className="mt-0.5 text-sm text-text-secondary">{item.message}</p>
+                <NotificationDot active={item.active} unread={item.unread} status={item.status} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-maroon">
+                    {item.categoryLabel}
+                  </p>
+                  <p
+                    className={cn(
+                      'mt-0.5 text-sm text-text-primary',
+                      item.unread ? 'font-semibold' : 'font-medium',
+                    )}
+                  >
+                    {item.title}
+                  </p>
+                  <p className="mt-0.5 text-sm text-text-secondary">{item.message}</p>
+                </div>
               </Link>
             </li>
           ))}

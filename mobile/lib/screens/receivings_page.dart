@@ -3,8 +3,14 @@ import 'package:flutter/material.dart';
 import '../services/api_client.dart';
 import '../services/api_errors.dart';
 import '../services/offline_cache.dart';
+import '../services/transaction_actions.dart';
+import '../services/transaction_lists.dart';
+import '../navigation/mobile_modules.dart';
+import '../navigation/transaction_detail_host.dart';
+import '../navigation/transaction_navigation.dart';
 import '../theme/app_theme.dart';
 import '../widgets/field_ui.dart';
+import '../widgets/transaction_workflows.dart';
 
 class ReceivingsPage extends StatefulWidget {
   const ReceivingsPage({super.key, required this.api});
@@ -23,6 +29,7 @@ class _ReceivingsPageState extends State<ReceivingsPage> {
   String? _offlineLabel;
   String _filter = 'open';
   List<Map<String, dynamic>> _rows = [];
+  TransactionLists _lists = const TransactionLists();
 
   @override
   void initState() {
@@ -49,11 +56,17 @@ class _ReceivingsPageState extends State<ReceivingsPage> {
       _offlineLabel = null;
     });
     try {
-      final data = await widget.api.getList('/receivings');
+      final results = await Future.wait([
+        widget.api.getList('/receivings'),
+        TransactionLists.load(widget.api),
+      ]);
+      final data = results[0] as List<dynamic>;
+      final lists = results[1] as TransactionLists;
       await OfflineCache.saveList(OfflineCache.receivings, data);
       if (!mounted) return;
       setState(() {
         _rows = data.cast<Map<String, dynamic>>();
+        _lists = lists;
         _loading = false;
       });
     } catch (error) {
@@ -116,6 +129,30 @@ class _ReceivingsPageState extends State<ReceivingsPage> {
     }
   }
 
+  Future<void> _createOutslip(Map<String, dynamic> row, {bool popCurrentRoute = false}) async {
+    if (_fromCache) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Offline')));
+      return;
+    }
+    final created = await showCreateOutslipDialog(
+      context,
+      widget.api,
+      initialReceivingDbId: fieldDbId(row),
+      completedReceivings: _rows.where((r) => r['status'] == 'completed').toList(),
+    );
+    if (created != null) {
+      await _load();
+      if (!mounted) return;
+      await openCreatedTransaction(
+        context,
+        widget.api,
+        MobileModule.outslips,
+        created,
+        popCurrentRoute: popCurrentRoute,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading && _rows.isEmpty && _error == null) {
@@ -149,7 +186,8 @@ class _ReceivingsPageState extends State<ReceivingsPage> {
           ...visible.map((row) {
             final id = row['dbId']?.toString() ?? row['id']?.toString() ?? '';
             final status = row['status']?.toString() ?? '';
-            final pending = status != 'completed';
+            final pending = canConfirmReceiving(row);
+            final canCreateOutslip = canCreateOutslipFromReceiving(row, _lists);
             final itemCount = (row['items'] as List<dynamic>? ?? const []).length;
             final busy = _busyId == id;
 
@@ -167,16 +205,18 @@ class _ReceivingsPageState extends State<ReceivingsPage> {
                         onPressed: busy || _fromCache ? null : () => _confirm(row),
                         child: Text(busy ? '…' : 'Confirm'),
                       )
-                    : FieldStatusChip(status),
+                    : canCreateOutslip
+                        ? FilledButton.tonal(
+                            onPressed: _fromCache ? null : () => _createOutslip(row),
+                            child: const Text('Create outslip'),
+                          )
+                        : FieldStatusChip(status),
                 onTap: () async {
-                  await Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => ReceivingDetailPage(
-                        receivingId: id,
-                        initial: row,
-                        onConfirm: pending && !_fromCache ? () => _confirm(row) : null,
-                      ),
-                    ),
+                  await pushTransactionDetail(
+                    context,
+                    widget.api,
+                    MobileModule.receiving,
+                    row,
                   );
                   await _load();
                 },
@@ -194,12 +234,16 @@ class ReceivingDetailPage extends StatelessWidget {
     super.key,
     required this.receivingId,
     required this.initial,
+    this.popAfterMutations = true,
     this.onConfirm,
+    this.onCreateOutslip,
   });
 
   final String receivingId;
   final Map<String, dynamic> initial;
+  final bool popAfterMutations;
   final Future<void> Function()? onConfirm;
+  final Future<void> Function()? onCreateOutslip;
 
   @override
   Widget build(BuildContext context) {
@@ -216,17 +260,23 @@ class ReceivingDetailPage extends StatelessWidget {
       title: initial['id']?.toString() ?? 'Receiving',
       subtitle: supplier,
       status: initial['status']?.toString(),
-      actions: pending && onConfirm != null
-          ? [
-              FilledButton(
-                onPressed: () async {
-                  await onConfirm!();
-                  if (context.mounted) Navigator.pop(context);
-                },
-                child: const Text('Confirm receiving'),
-              ),
-            ]
-          : null,
+      actions: [
+        if (pending && onConfirm != null)
+          FilledButton(
+            onPressed: () async {
+              await onConfirm!();
+              if (popAfterMutations && context.mounted) Navigator.pop(context);
+            },
+            child: const Text('Confirm receiving'),
+          ),
+        if (!pending && onCreateOutslip != null)
+          FilledButton.tonal(
+            onPressed: () async {
+              await onCreateOutslip!();
+            },
+            child: const Text('Create outslip'),
+          ),
+      ],
       children: [
         const SizedBox(height: 12),
         _metaRow(Icons.calendar_today_outlined, 'Date', '${initial['displayDate'] ?? initial['date'] ?? '—'}'),

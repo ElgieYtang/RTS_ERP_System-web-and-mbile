@@ -1,6 +1,19 @@
 import 'package:flutter/material.dart';
 
+import '../navigation/app_navigation.dart';
+import '../widgets/transactions_drawer.dart';
 import '../theme/app_theme.dart';
+
+String fieldRowId(Map<String, dynamic> row) =>
+    row['dbId']?.toString() ?? row['id']?.toString() ?? '';
+
+String fieldDbId(Map<String, dynamic> row) =>
+    row['dbId']?.toString() ?? row['id']?.toString() ?? '';
+
+String fieldFormatMoney(dynamic value) {
+  final amount = value is num ? value.toDouble() : double.tryParse(value?.toString() ?? '') ?? 0;
+  return '₱${amount.toStringAsFixed(2)}';
+}
 
 String fieldStatusLabel(String? status) {
   final raw = (status ?? '').trim();
@@ -11,24 +24,74 @@ String fieldStatusLabel(String? status) {
       .join(' ');
 }
 
-Color fieldStatusColor(String? status) {
-  switch ((status ?? '').toLowerCase()) {
-    case 'completed':
-    case 'delivered':
-    case 'approved':
-      return AppTheme.successText;
-    case 'out_for_delivery':
-    case 'for_dispatch':
-      return AppTheme.warningText;
-    case 'pending':
-    case 'active':
+/// Matches web `frontend/src/lib/status.js` badge variants.
+String fieldStatusVariant(String? status) {
+  switch ((status ?? '').trim().toLowerCase()) {
     case 'draft':
-      return AppTheme.maroon;
+      return 'draft';
+    case 'pending':
+    case 'partial':
+    case 'out_for_delivery':
+    case 'unpaid':
+    case 'partially_paid':
+    case 'low stock':
+      return 'pending';
+    case 'approved':
+    case 'completed':
+    case 'fully_received':
+    case 'released':
+    case 'delivered':
+    case 'paid':
+    case 'in stock':
+      return 'approved';
+    case 'rejected':
     case 'cancelled':
     case 'inactive':
-      return AppTheme.textSecondary;
+    case 'out of stock':
+      return 'rejected';
+    case 'for_dispatch':
+    case 'active':
+      return 'current';
     default:
-      return AppTheme.textSecondary;
+      return 'draft';
+  }
+}
+
+class FieldStatusStyle {
+  const FieldStatusStyle({required this.foreground, required this.background});
+
+  final Color foreground;
+  final Color background;
+}
+
+FieldStatusStyle fieldStatusStyle(String? status) {
+  switch (fieldStatusVariant(status)) {
+    case 'approved':
+      return const FieldStatusStyle(
+        foreground: AppTheme.successText,
+        background: Color(0xFFDCFCE7),
+      );
+    case 'pending':
+      return const FieldStatusStyle(
+        foreground: AppTheme.warningText,
+        background: Color(0xFFFEF3C7),
+      );
+    case 'rejected':
+      return const FieldStatusStyle(
+        foreground: AppTheme.errorText,
+        background: AppTheme.errorBg,
+      );
+    case 'current':
+      return const FieldStatusStyle(
+        foreground: AppTheme.maroon,
+        background: AppTheme.maroonLight,
+      );
+    case 'draft':
+    default:
+      return const FieldStatusStyle(
+        foreground: AppTheme.textSecondary,
+        background: Color(0xFFF3F4F6),
+      );
   }
 }
 
@@ -39,16 +102,20 @@ class FieldStatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = fieldStatusColor(status);
+    final style = fieldStatusStyle(status);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
+        color: style.background,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         fieldStatusLabel(status),
-        style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 11),
+        style: TextStyle(
+          color: style.foreground,
+          fontWeight: FontWeight.w600,
+          fontSize: 11,
+        ),
       ),
     );
   }
@@ -281,7 +348,8 @@ class FieldDetailScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
+      appBar: transactionAppBar(context, title: title),
+      drawer: moduleTransactionDrawer(context),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

@@ -37,6 +37,7 @@ export function buildNotifications(
         title: 'Quotation awaiting approval',
         message: `${row.id} · ${row.customerName ?? 'Customer'}`,
         path: `/quotations/${row.id}`,
+        active: true,
       })
     }
   }
@@ -52,6 +53,7 @@ export function buildNotifications(
         title: 'Purchase order needs receiving',
         message: `${row.id} · ${row.supplierName ?? row.supplier ?? 'Supplier'}`,
         path: `/purchase-order/${row.id}`,
+        active: true,
       })
     }
   }
@@ -65,6 +67,7 @@ export function buildNotifications(
         title: 'Receiving not completed',
         message: `${row.id} · ${row.referencePoId ?? row.poId ?? 'PO'}`,
         path: '/inventory/receiving',
+        active: true,
       })
     }
   }
@@ -82,6 +85,7 @@ export function buildNotifications(
         title,
         message: `${row.id} · ${row.customerName ?? 'Customer'}`,
         path: `/outslip/${row.id}`,
+        active: true,
       })
     }
   }
@@ -97,6 +101,8 @@ export function buildNotifications(
         title: 'Delivery in progress',
         message: `${row.id} · ${row.customerName ?? 'Customer'}`,
         path: `/delivery-receipt/${row.id}`,
+        active: true,
+        status: row.status,
       })
     }
   }
@@ -112,6 +118,7 @@ export function buildNotifications(
         title: row.paymentStatus === 'partially_paid' ? 'Billing partially paid' : 'Billing unpaid',
         message: `${row.id} · ${row.customerName ?? 'Customer'}`,
         path: '/billing',
+        active: true,
       })
     }
   }
