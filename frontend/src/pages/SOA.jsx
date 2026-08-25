@@ -60,7 +60,10 @@ export function SOAPage() {
     }
   }, [customerId, dateFrom, dateTo, loadSoa, setSearchParams])
 
-  const previewPath = `/soa/preview?customerId=${encodeURIComponent(customerId)}`
+  const previewParams = new URLSearchParams({ customerId: String(customerId) })
+  if (dateFrom) previewParams.set('from', dateFrom)
+  if (dateTo) previewParams.set('to', dateTo)
+  const previewPath = `/soa/preview?${previewParams.toString()}`
   const totals = account?.totals ?? { totalDebit: 0, totalCredit: 0, outstanding: 0 }
   const rows = account?.rows ?? []
 

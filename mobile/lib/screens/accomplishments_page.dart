@@ -2,10 +2,13 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:printing/printing.dart';
 
+import '../services/accomplishment_pdf.dart';
 import '../services/api_client.dart';
 import '../services/api_errors.dart';
 import '../services/offline_cache.dart';
+import '../theme/app_theme.dart';
 import '../widgets/field_ui.dart';
 
 class AccomplishmentsPage extends StatefulWidget {
@@ -241,12 +244,50 @@ class AccomplishmentDetailPage extends StatefulWidget {
 }
 
 class _AccomplishmentDetailPageState extends State<AccomplishmentDetailPage> {
+  static const _photosPerPage = 4;
+
   bool _loading = true;
   bool _uploading = false;
+  bool _exportingPdf = false;
+  int _photoPage = 1;
   String? _error;
   String? _uploadProgress;
   Map<String, dynamic>? _report;
   final Map<String, Uint8List> _photoBytes = {};
+
+  List<MapEntry<String, Uint8List>> get _orderedPhotos {
+    final images =
+        (_report?['images'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
+    final entries = <MapEntry<String, Uint8List>>[];
+    for (final image in images) {
+      final id = image['id']?.toString();
+      if (id != null && _photoBytes.containsKey(id)) {
+        entries.add(MapEntry(id, _photoBytes[id]!));
+      }
+    }
+    return entries;
+  }
+
+  int get _photoPageCount {
+    final count = _orderedPhotos.length;
+    if (count == 0) return 1;
+    return (count / _photosPerPage).ceil();
+  }
+
+  List<MapEntry<String, Uint8List>> get _visiblePhotos {
+    final start = (_photoPage - 1) * _photosPerPage;
+    return _orderedPhotos.skip(start).take(_photosPerPage).toList();
+  }
+
+  void _clampPhotoPage() {
+    final maxPage = _photoPageCount;
+    if (_photoPage > maxPage) {
+      _photoPage = maxPage;
+    }
+    if (_photoPage < 1) {
+      _photoPage = 1;
+    }
+  }
 
   @override
   void initState() {
@@ -280,6 +321,7 @@ class _AccomplishmentDetailPageState extends State<AccomplishmentDetailPage> {
         _photoBytes
           ..clear()
           ..addAll(bytes);
+        _clampPhotoPage();
         _loading = false;
       });
     } catch (error) {
@@ -321,6 +363,8 @@ class _AccomplishmentDetailPageState extends State<AccomplishmentDetailPage> {
         const SnackBar(content: Text('Photos uploaded')),
       );
       await _load();
+      if (!mounted) return;
+      setState(() => _photoPage = _photoPageCount);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -339,6 +383,28 @@ class _AccomplishmentDetailPageState extends State<AccomplishmentDetailPage> {
           _uploadProgress = null;
         });
       }
+    }
+  }
+
+  Future<void> _exportPdf() async {
+    final report = _report;
+    if (report == null || _exportingPdf) return;
+
+    setState(() => _exportingPdf = true);
+    try {
+      final bytes = await AccomplishmentPdf.build(
+        report: report,
+        photoBytes: _photoBytes,
+      );
+      final filename = '${report['id'] ?? 'accomplishment'}.pdf';
+      await Printing.sharePdf(bytes: bytes, filename: filename);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not create PDF: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _exportingPdf = false);
     }
   }
 
@@ -373,6 +439,20 @@ class _AccomplishmentDetailPageState extends State<AccomplishmentDetailPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(report?['id']?.toString() ?? 'Accomplishment'),
+        actions: [
+          if (report != null)
+            IconButton(
+              onPressed: _exportingPdf ? null : _exportPdf,
+              tooltip: 'Download PDF',
+              icon: _exportingPdf
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.picture_as_pdf_outlined),
+            ),
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -434,19 +514,39 @@ class _AccomplishmentDetailPageState extends State<AccomplishmentDetailPage> {
                       ),
                     ],
                     const SizedBox(height: 16),
-                    if (_photoBytes.isEmpty)
+                    if (_orderedPhotos.isEmpty)
                       const FieldEmptyState(
                         icon: Icons.image_outlined,
                         title: 'No photos yet',
                       )
-                    else
-                      GridView.count(
+                    else ...[
+                      Text(
+                        '${_orderedPhotos.length} photo${_orderedPhotos.length == 1 ? '' : 's'}'
+                        '${_photoPageCount > 1 ? ' · page $_photoPage of $_photoPageCount' : ''}'
+                        ' (max $_photosPerPage per page)',
+                        style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                      ),
+                      if (_photoPageCount > 1) ...[
+                        const SizedBox(height: 10),
+                        _PhotoPageSelector(
+                          pageCount: _photoPageCount,
+                          currentPage: _photoPage,
+                          onPageSelected: (page) => setState(() => _photoPage = page),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      GridView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
-                        crossAxisCount: 2,
-                        mainAxisSpacing: 10,
-                        crossAxisSpacing: 10,
-                        children: _photoBytes.entries.map((entry) {
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 10,
+                          crossAxisSpacing: 10,
+                          childAspectRatio: 1,
+                        ),
+                        itemCount: _visiblePhotos.length,
+                        itemBuilder: (context, index) {
+                          final entry = _visiblePhotos[index];
                           return Stack(
                             fit: StackFit.expand,
                             children: [
@@ -468,10 +568,47 @@ class _AccomplishmentDetailPageState extends State<AccomplishmentDetailPage> {
                               ),
                             ],
                           );
-                        }).toList(),
+                        },
                       ),
+                    ],
                   ],
                 ),
+    );
+  }
+}
+
+class _PhotoPageSelector extends StatelessWidget {
+  const _PhotoPageSelector({
+    required this.pageCount,
+    required this.currentPage,
+    required this.onPageSelected,
+  });
+
+  final int pageCount;
+  final int currentPage;
+  final ValueChanged<int> onPageSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      alignment: WrapAlignment.center,
+      children: List.generate(pageCount, (index) {
+        final page = index + 1;
+        final active = page == currentPage;
+        return FilledButton(
+          onPressed: () => onPageSelected(page),
+          style: FilledButton.styleFrom(
+            backgroundColor: active ? AppTheme.maroon : Colors.white,
+            foregroundColor: active ? Colors.white : AppTheme.maroon,
+            side: const BorderSide(color: AppTheme.maroon),
+            minimumSize: const Size(44, 40),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+          ),
+          child: Text('$page'),
+        );
+      }),
     );
   }
 }

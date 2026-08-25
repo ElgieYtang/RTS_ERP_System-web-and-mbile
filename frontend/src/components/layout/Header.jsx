@@ -1,28 +1,40 @@
+import { NotificationBellButton, NotificationPanel } from '@/components/layout/NotificationPanel'
 import { useAuth } from '@/context/AuthContext'
+import { useNotifications } from '@/hooks/useNotifications'
 import { cn } from '@/lib/utils'
-import { Bell, ChevronDown, LogOut, Menu, Settings, User } from 'lucide-react'
+import { ChevronDown, LogOut, Menu, Settings, User } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 export function Header({ onMenuClick }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const menuRef = useRef(null)
+  const bellRef = useRef(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const { count, enabled } = useNotifications()
 
   const initial = user?.name?.charAt(0).toUpperCase() ?? 'A'
 
   useEffect(() => {
-    if (!menuOpen) return
+    if (!menuOpen && !notificationsOpen) return
 
     const handleClickOutside = (event) => {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
         setMenuOpen(false)
       }
+      if (bellRef.current && !bellRef.current.contains(event.target)) {
+        setNotificationsOpen(false)
+      }
     }
 
     const handleEscape = (event) => {
-      if (event.key === 'Escape') setMenuOpen(false)
+      if (event.key === 'Escape') {
+        setMenuOpen(false)
+        setNotificationsOpen(false)
+      }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
@@ -32,7 +44,12 @@ export function Header({ onMenuClick }) {
       document.removeEventListener('mousedown', handleClickOutside)
       document.removeEventListener('keydown', handleEscape)
     }
-  }, [menuOpen])
+  }, [menuOpen, notificationsOpen])
+
+  useEffect(() => {
+    setMenuOpen(false)
+    setNotificationsOpen(false)
+  }, [location.pathname])
 
   const handleLogout = async () => {
     setMenuOpen(false)
@@ -42,7 +59,7 @@ export function Header({ onMenuClick }) {
 
   const handleViewProfile = () => {
     setMenuOpen(false)
-    navigate('/settings')
+    navigate('/profile')
   }
 
   return (
@@ -59,18 +76,29 @@ export function Header({ onMenuClick }) {
       </div>
 
       <div className="flex items-center gap-2 sm:gap-4">
-        <button
-          type="button"
-          className="rounded-md p-2 text-text-secondary transition-colors hover:bg-maroon-light hover:text-maroon"
-          aria-label="Notifications"
-        >
-          <Bell className="h-5 w-5" />
-        </button>
+        <div ref={bellRef} className="relative">
+          <NotificationBellButton
+            open={notificationsOpen}
+            count={count}
+            enabled={enabled}
+            onClick={() => {
+              setNotificationsOpen((open) => !open)
+              setMenuOpen(false)
+            }}
+          />
+          <NotificationPanel
+            open={notificationsOpen}
+            onClose={() => setNotificationsOpen(false)}
+          />
+        </div>
 
         <div ref={menuRef} className="relative">
           <button
             type="button"
-            onClick={() => setMenuOpen((open) => !open)}
+            onClick={() => {
+              setMenuOpen((open) => !open)
+              setNotificationsOpen(false)
+            }}
             className={cn(
               'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-text-primary transition-colors hover:bg-maroon-light',
               menuOpen && 'bg-maroon-light',

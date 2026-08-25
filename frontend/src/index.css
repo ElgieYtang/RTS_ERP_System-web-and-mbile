@@ -1224,6 +1224,200 @@ input.login-field:-webkit-autofill:active {
   font-size: 10px;
 }
 
+/* Statement of account printable */
+.soa-print__meta {
+  display: grid;
+  grid-template-columns: 1fr 240px;
+  gap: 20px;
+  margin-top: 6px;
+}
+
+.soa-print__customer-name {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  line-height: 1.35;
+}
+
+.soa-print__customer-address,
+.soa-print__customer-thru {
+  margin: 0;
+  font-size: 11px;
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.soa-print__customer-thru {
+  margin-top: 4px;
+}
+
+.soa-print__doc-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.soa-print__doc-field {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 6px;
+  align-items: end;
+  font-size: 11px;
+}
+
+.soa-print__doc-value {
+  border-bottom: 1px solid #000;
+  min-height: 16px;
+  padding-bottom: 1px;
+}
+
+.soa-print__reference {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 5px 8px;
+  background: #d9e8f7;
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.soa-print__section-label {
+  margin: 10px 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.soa-print__items {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.soa-print__items th,
+.soa-print__items td {
+  border: 1px solid #000;
+  padding: 4px 6px;
+  vertical-align: top;
+  font-size: 10px;
+}
+
+.soa-print__items th {
+  background: #d9d9d9;
+  font-weight: 700;
+  text-align: center;
+}
+
+.soa-print__items th:nth-child(1) { width: 6%; }
+.soa-print__items th:nth-child(2) { width: 6%; }
+.soa-print__items th:nth-child(3) { width: 8%; }
+.soa-print__items th:nth-child(4) { width: 46%; }
+.soa-print__items th:nth-child(5) { width: 16%; }
+.soa-print__items th:nth-child(6) { width: 18%; }
+
+.soa-print__cell-center {
+  text-align: center;
+}
+
+.soa-print__cell-right {
+  text-align: right;
+}
+
+.soa-print__empty-row td {
+  height: 18px;
+}
+
+.soa-print__nothing-follows td {
+  text-align: center;
+  font-weight: 700;
+  font-style: italic;
+  letter-spacing: 0.06em;
+  padding: 6px;
+}
+
+.soa-print__total-row td {
+  border-top: 1px solid #000;
+}
+
+.soa-print__total-label,
+.soa-print__total-currency {
+  background: #d9e8f7;
+  font-weight: 700;
+  text-align: right;
+  text-transform: uppercase;
+  padding-right: 8px;
+}
+
+.soa-print__total-currency {
+  text-align: center;
+}
+
+.soa-print__total-value {
+  font-weight: 700;
+  text-align: right;
+  border-bottom: 3px double #000;
+}
+
+.soa-print__summary-row td {
+  border-top: 1px solid #000;
+  font-size: 10px;
+}
+
+.soa-print__summary-label,
+.soa-print__summary-currency {
+  font-weight: 700;
+  text-align: right;
+  text-transform: uppercase;
+  padding-right: 8px;
+}
+
+.soa-print__summary-currency {
+  text-align: center;
+}
+
+.soa-print__summary-value {
+  font-weight: 700;
+  text-align: right;
+}
+
+.soa-print__footer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  margin-top: 28px;
+}
+
+.soa-print__footer-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 120px;
+}
+
+.soa-print__footer-label {
+  margin: 0;
+  font-weight: 700;
+}
+
+.soa-print__footer-name {
+  margin: 0;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.soa-print__footer-title,
+.soa-print__footer-hint {
+  margin: 2px 0 0;
+  font-size: 10px;
+}
+
+.soa-print__thanks {
+  margin: 18px 0 0;
+  text-align: center;
+  font-size: 11px;
+  font-style: italic;
+}
+
 @media print {
   .quotation-print-page {
     padding: 0;
