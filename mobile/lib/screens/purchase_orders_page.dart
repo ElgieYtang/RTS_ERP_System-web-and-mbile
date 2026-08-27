@@ -121,7 +121,7 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
         const SnackBar(content: Text('Receiving created.')),
       );
       await _load();
-      if (receiving != null) {
+      if (receiving != null && mounted) {
         await openCreatedTransaction(
           context,
           widget.api,
@@ -255,32 +255,26 @@ class PurchaseOrderDetailPage extends StatelessWidget {
       title: order['id']?.toString() ?? 'Purchase order',
       subtitle: order['supplierName']?.toString() ?? 'Supplier —',
       status: order['status']?.toString(),
-      actions: [
-        if (canReceive && onReceive != null)
-          FilledButton(
-            onPressed: () async {
-              await onReceive!();
-            },
-            child: const Text('Receive items'),
-          ),
-        const SizedBox(height: 8),
+      secondaryActions: [
         PrintDocumentButton(
           onPrint: () => printPurchaseOrder(context, api, order),
+          label: 'Print PDF',
         ),
       ],
+      primaryActions: [
+        if (canReceive && onReceive != null)
+          FilledButton(
+            onPressed: () async => onReceive!(),
+            child: const Text('Receive items'),
+          ),
+      ],
       children: [
-        const SizedBox(height: 12),
-        Text(
-          'Date: ${order['displayDate'] ?? order['date'] ?? '—'}',
-          style: const TextStyle(color: AppTheme.textSecondary),
-        ),
-        Text(
-          'Quotation: ${order['referenceQuotationId'] ?? '—'}',
-          style: const TextStyle(color: AppTheme.textSecondary),
-        ),
-        Text(
-          'Total: ${fieldFormatMoney(order['total'])}',
-          style: const TextStyle(color: AppTheme.textSecondary),
+        FieldDetailMeta(
+          rows: [
+            (label: 'Date', value: '${order['displayDate'] ?? order['date'] ?? '—'}'),
+            (label: 'Quotation', value: '${order['referenceQuotationId'] ?? '—'}'),
+            (label: 'Total', value: fieldFormatMoney(order['total'])),
+          ],
         ),
         const SizedBox(height: 16),
         const FieldSectionTitle('Line items'),

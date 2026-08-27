@@ -29,12 +29,15 @@ class MobileModuleInfo {
     required this.title,
     required this.subtitle,
     required this.icon,
+    required this.gridLabel,
   });
 
   final MobileModule id;
   final String title;
   final String subtitle;
   final IconData icon;
+  /// Short label under the dashboard icon grid.
+  final String gridLabel;
 }
 
 const mobileModules = <MobileModuleInfo>[
@@ -43,48 +46,56 @@ const mobileModules = <MobileModuleInfo>[
     title: 'Quotations',
     subtitle: 'Approve and convert to PO',
     icon: Icons.request_quote_outlined,
+    gridLabel: 'Quotes',
   ),
   MobileModuleInfo(
     id: MobileModule.purchaseOrders,
     title: 'Purchase Orders',
     subtitle: 'Receive items from suppliers',
     icon: Icons.shopping_cart_outlined,
+    gridLabel: 'PO',
   ),
   MobileModuleInfo(
     id: MobileModule.receiving,
     title: 'Receiving',
     subtitle: 'Confirm warehouse intake',
     icon: Icons.inventory_2_outlined,
+    gridLabel: 'Receive',
   ),
   MobileModuleInfo(
     id: MobileModule.outslips,
     title: 'Outslips',
     subtitle: 'Approve and dispatch stock',
     icon: Icons.outbox_outlined,
+    gridLabel: 'Outslip',
   ),
   MobileModuleInfo(
     id: MobileModule.deliveries,
     title: 'Delivery Receipts',
     subtitle: 'Track delivery status',
     icon: Icons.local_shipping_outlined,
+    gridLabel: 'Delivery',
   ),
   MobileModuleInfo(
     id: MobileModule.billing,
     title: 'Billing',
     subtitle: 'Record customer payments',
     icon: Icons.receipt_long_outlined,
+    gridLabel: 'Billing',
   ),
   MobileModuleInfo(
     id: MobileModule.soa,
     title: 'Statement of Account',
     subtitle: 'Customer balances',
     icon: Icons.account_balance_wallet_outlined,
+    gridLabel: 'SOA',
   ),
   MobileModuleInfo(
     id: MobileModule.accomplishments,
     title: 'Accomplishments',
     subtitle: 'Field photo reports',
     icon: Icons.photo_camera_outlined,
+    gridLabel: 'Reports',
   ),
 ];
 

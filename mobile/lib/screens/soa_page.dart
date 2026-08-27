@@ -21,7 +21,43 @@ class _SoaPageState extends State<SoaPage> {
   String? _error;
   List<Map<String, dynamic>> _customers = [];
   String? _customerId;
+  DateTime? _dateFrom;
+  DateTime? _dateTo;
   Map<String, dynamic>? _account;
+
+  String? _formatApiDate(DateTime? date) {
+    if (date == null) return null;
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  String _formatDisplayDate(DateTime? date) {
+    if (date == null) return 'Any';
+    return _formatApiDate(date)!;
+  }
+
+  Future<void> _pickDate({required bool isFrom}) async {
+    final initial = isFrom ? _dateFrom : _dateTo;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      if (isFrom) {
+        _dateFrom = picked;
+        if (_dateTo != null && _dateTo!.isBefore(picked)) {
+          _dateTo = picked;
+        }
+      } else {
+        _dateTo = picked;
+        if (_dateFrom != null && _dateFrom!.isAfter(picked)) {
+          _dateFrom = picked;
+        }
+      }
+    });
+  }
 
   Future<void> _loadCustomers() async {
     setState(() {
@@ -58,9 +94,15 @@ class _SoaPageState extends State<SoaPage> {
       _error = null;
     });
     try {
+      final query = <String, String>{'customerId': customerId};
+      final from = _formatApiDate(_dateFrom);
+      final to = _formatApiDate(_dateTo);
+      if (from != null) query['from'] = from;
+      if (to != null) query['to'] = to;
+
       final data = await widget.api.getData(
         '/reports/soa',
-        query: {'customerId': customerId},
+        query: query,
       );
       if (!mounted) return;
       setState(() {
@@ -114,7 +156,8 @@ class _SoaPageState extends State<SoaPage> {
                   const Text('Customer', style: TextStyle(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
-                    value: _customerId,
+                    key: ValueKey(_customerId),
+                    initialValue: _customerId,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
                       isDense: true,
@@ -132,6 +175,44 @@ class _SoaPageState extends State<SoaPage> {
                       _loadSoa();
                     },
                   ),
+                  const SizedBox(height: 12),
+                  const Text('Date range (optional)', style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _pickDate(isFrom: true),
+                          icon: const Icon(Icons.calendar_today_outlined, size: 18),
+                          label: Text('From: ${_formatDisplayDate(_dateFrom)}'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _pickDate(isFrom: false),
+                          icon: const Icon(Icons.event_outlined, size: 18),
+                          label: Text('To: ${_formatDisplayDate(_dateTo)}'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_dateFrom != null || _dateTo != null) ...[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _dateFrom = null;
+                            _dateTo = null;
+                          });
+                          _loadSoa();
+                        },
+                        child: const Text('Clear dates'),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   FilledButton(
                     onPressed: _loadingSoa ? null : _loadSoa,
@@ -160,6 +241,13 @@ class _SoaPageState extends State<SoaPage> {
                       customer['name']?.toString() ?? 'Customer',
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                     ),
+                    if ((_account?['periodLabel']?.toString() ?? '').isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        _account!['periodLabel'].toString(),
+                        style: const TextStyle(color: AppTheme.textSecondary),
+                      ),
+                    ],
                     const SizedBox(height: 8),
                     Text('Charges: ${fieldFormatMoney(totals['totalDebit'])}'),
                     Text('Payments: ${fieldFormatMoney(totals['totalCredit'])}'),

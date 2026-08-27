@@ -5,7 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:printing/printing.dart';
 
 import '../navigation/app_navigation.dart';
-import '../widgets/transactions_drawer.dart';
+import '../navigation/module_navigation_scope.dart';
 import '../services/accomplishment_pdf.dart';
 import '../services/api_client.dart';
 import '../services/api_errors.dart';
@@ -158,9 +158,12 @@ class _AccomplishmentsPageState extends State<AccomplishmentsPage> {
       if (report != null) {
         await Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => AccomplishmentDetailPage(
-              api: widget.api,
-              reportId: report['dbId']?.toString() ?? report['id'].toString(),
+            builder: (_) => wrapModuleNavigationScope(
+              context,
+              AccomplishmentDetailPage(
+                api: widget.api,
+                reportId: report['dbId']?.toString() ?? report['id'].toString(),
+              ),
             ),
           ),
         );
@@ -239,9 +242,12 @@ class _AccomplishmentsPageState extends State<AccomplishmentsPage> {
                   onTap: () async {
                     await Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => AccomplishmentDetailPage(
-                          api: widget.api,
-                          reportId: row['dbId']?.toString() ?? row['id'].toString(),
+                        builder: (_) => wrapModuleNavigationScope(
+                          context,
+                          AccomplishmentDetailPage(
+                            api: widget.api,
+                            reportId: row['dbId']?.toString() ?? row['id'].toString(),
+                          ),
                         ),
                       ),
                     );
@@ -437,6 +443,39 @@ class _AccomplishmentDetailPageState extends State<AccomplishmentDetailPage> {
     }
   }
 
+  Future<void> _editReport() async {
+    final report = _report;
+    if (report == null || !canEditAccomplishment(report)) return;
+
+    final result = await showDialog<({DateTime date, String remarks})>(
+      context: context,
+      builder: (_) => _EditAccomplishmentDialog(
+        initialRemarks: report['remarks']?.toString() ?? '',
+        initialDate: DateTime.tryParse(report['date']?.toString() ?? '') ?? DateTime.now(),
+      ),
+    );
+    if (result == null || !mounted) return;
+
+    final id = report['dbId']?.toString() ?? widget.reportId;
+    final dateStr =
+        '${result.date.year}-${result.date.month.toString().padLeft(2, '0')}-${result.date.day.toString().padLeft(2, '0')}';
+
+    try {
+      await widget.api.put('/accomplishments/$id', {
+        'date': dateStr,
+        'remarks': result.remarks.isEmpty ? null : result.remarks,
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Report updated.')),
+      );
+      await _load();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyApiError(error))));
+    }
+  }
+
   Future<void> _deletePhoto(String photoId) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -469,23 +508,8 @@ class _AccomplishmentDetailPageState extends State<AccomplishmentDetailPage> {
       appBar: transactionAppBar(
         context,
         title: report?['id']?.toString() ?? 'Accomplishment',
-        extraActions: report == null
-            ? null
-            : [
-                IconButton(
-                  onPressed: _exportingPdf ? null : _exportPdf,
-                  tooltip: 'Download PDF',
-                  icon: _exportingPdf
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.picture_as_pdf_outlined),
-                ),
-              ],
+        showBack: true,
       ),
-      drawer: moduleTransactionDrawer(context),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : report == null
@@ -501,51 +525,118 @@ class _AccomplishmentDetailPageState extends State<AccomplishmentDetailPage> {
               : ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            report['projectName']?.toString() ?? 'Project',
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                          ),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    report['projectName']?.toString() ?? 'Project',
+                                    style: const TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w700,
+                                      height: 1.3,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                FieldStatusChip(report['status']?.toString()),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            FieldDetailMeta(
+                              rows: [
+                                if ((report['location']?.toString() ?? '').isNotEmpty)
+                                  (label: 'Location', value: report['location'].toString()),
+                                (
+                                  label: 'Date',
+                                  value: report['displayDate']?.toString() ??
+                                      report['date']?.toString() ??
+                                      '—',
+                                ),
+                              ],
+                            ),
+                            if ((report['remarks']?.toString() ?? '').isNotEmpty) ...[
+                              const SizedBox(height: 10),
+                              Text(
+                                report['remarks'].toString(),
+                                style: const TextStyle(fontSize: 14, height: 1.5),
+                              ),
+                            ],
+                          ],
                         ),
-                        FieldStatusChip(report['status']?.toString()),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    if ((report['location']?.toString() ?? '').isNotEmpty)
-                      Text(report['location'].toString()),
-                    Text(report['displayDate']?.toString() ?? report['date']?.toString() ?? '—'),
-                    if ((report['remarks']?.toString() ?? '').isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(report['remarks'].toString()),
-                    ],
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        FilledButton.icon(
-                          onPressed: _uploading ? null : () => _pickAndUpload(ImageSource.camera),
-                          icon: const Icon(Icons.photo_camera),
-                          label: const Text('Camera'),
-                        ),
-                        const SizedBox(width: 8),
-                        FilledButton.tonalIcon(
-                          onPressed: _uploading ? null : () => _pickAndUpload(ImageSource.gallery),
-                          icon: const Icon(Icons.photo_library),
-                          label: const Text('Gallery'),
-                        ),
-                      ],
-                    ),
-                    if (_uploading) ...[
-                      const SizedBox(height: 12),
-                      const LinearProgressIndicator(),
-                      const SizedBox(height: 4),
-                      Text(
-                        _uploadProgress ?? 'Uploading…',
-                        style: const TextStyle(color: Colors.black54),
                       ),
-                    ],
-                    const SizedBox(height: 16),
+                    ),
+                    const SizedBox(height: 12),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: FieldDetailActions(
+                          secondary: [
+                            if (canEditAccomplishment(report))
+                              OutlinedButton.icon(
+                                onPressed: _editReport,
+                                icon: const Icon(Icons.edit_outlined),
+                                label: const Text('Edit report'),
+                              ),
+                            OutlinedButton.icon(
+                              onPressed: _exportingPdf ? null : _exportPdf,
+                              icon: _exportingPdf
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : const Icon(Icons.picture_as_pdf_outlined),
+                              label: Text(_exportingPdf ? 'Creating PDF…' : 'Print PDF'),
+                            ),
+                          ],
+                          primary: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: FilledButton.icon(
+                                    onPressed: _uploading
+                                        ? null
+                                        : () => _pickAndUpload(ImageSource.camera),
+                                    icon: const Icon(Icons.photo_camera),
+                                    label: const Text('Camera'),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: FilledButton.tonalIcon(
+                                    onPressed: _uploading
+                                        ? null
+                                        : () => _pickAndUpload(ImageSource.gallery),
+                                    icon: const Icon(Icons.photo_library),
+                                    label: const Text('Gallery'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (_uploading) ...[
+                              const SizedBox(height: 12),
+                              const LinearProgressIndicator(),
+                              const SizedBox(height: 6),
+                              Text(
+                                _uploadProgress ?? 'Uploading…',
+                                style: const TextStyle(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     if (_orderedPhotos.isEmpty)
                       const FieldEmptyState(
                         icon: Icons.image_outlined,
@@ -605,6 +696,92 @@ class _AccomplishmentDetailPageState extends State<AccomplishmentDetailPage> {
                     ],
                   ],
                 ),
+    );
+  }
+}
+
+class _EditAccomplishmentDialog extends StatefulWidget {
+  const _EditAccomplishmentDialog({
+    required this.initialRemarks,
+    required this.initialDate,
+  });
+
+  final String initialRemarks;
+  final DateTime initialDate;
+
+  @override
+  State<_EditAccomplishmentDialog> createState() => _EditAccomplishmentDialogState();
+}
+
+class _EditAccomplishmentDialogState extends State<_EditAccomplishmentDialog> {
+  late final TextEditingController _remarksController;
+  late DateTime _selectedDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _remarksController = TextEditingController(text: widget.initialRemarks);
+    _selectedDate = widget.initialDate;
+  }
+
+  @override
+  void dispose() {
+    _remarksController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null && mounted) {
+      setState(() => _selectedDate = picked);
+    }
+  }
+
+  void _save() {
+    Navigator.pop(
+      context,
+      (date: _selectedDate, remarks: _remarksController.text.trim()),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Edit report'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Date'),
+              subtitle: Text(
+                '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}',
+              ),
+              trailing: const Icon(Icons.calendar_today_outlined),
+              onTap: _pickDate,
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _remarksController,
+              decoration: const InputDecoration(
+                labelText: 'Remarks',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        FilledButton(onPressed: _save, child: const Text('Save')),
+      ],
     );
   }
 }

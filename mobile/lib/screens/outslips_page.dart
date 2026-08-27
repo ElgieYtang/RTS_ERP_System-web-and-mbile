@@ -8,8 +8,8 @@ import '../navigation/transaction_detail_host.dart';
 import '../navigation/transaction_navigation.dart';
 import '../services/transaction_actions.dart';
 import '../services/transaction_lists.dart';
-import '../theme/app_theme.dart';
 import '../widgets/field_ui.dart';
+import '../widgets/print_document_button.dart';
 import '../widgets/transaction_workflows.dart';
 
 class OutslipsPage extends StatefulWidget {
@@ -102,31 +102,12 @@ class _OutslipsPageState extends State<OutslipsPage> {
 
     final id = row['dbId']?.toString() ?? row['id']?.toString();
     if (id == null || _busyId != null) return;
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Approve outslip?'),
-        content: Text('Approve ${row['id'] ?? id}?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Approve')),
-        ],
-      ),
-    );
-    if (ok != true) return;
+    if (!canApproveOutslip(row)) return;
 
     setState(() => _busyId = id);
     try {
-      await widget.api.post('/outslips/$id/approve');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Outslip approved.')),
-      );
-      await _load();
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyApiError(error))));
+      final updated = await approveOutslip(context, widget.api, row);
+      if (updated != null) await _load();
     } finally {
       if (mounted) setState(() => _busyId = null);
     }
@@ -142,31 +123,12 @@ class _OutslipsPageState extends State<OutslipsPage> {
 
     final id = row['dbId']?.toString() ?? row['id']?.toString();
     if (id == null || _busyId != null) return;
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Dispatch outslip?'),
-        content: Text('Dispatch ${row['id'] ?? id}?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Dispatch')),
-        ],
-      ),
-    );
-    if (ok != true) return;
+    if (!canDispatchOutslip(row)) return;
 
     setState(() => _busyId = id);
     try {
-      await widget.api.post('/outslips/$id/dispatch');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Outslip dispatched')),
-      );
-      await _load();
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyApiError(error))));
+      final updated = await dispatchOutslip(context, widget.api, row);
+      if (updated != null) await _load();
     } finally {
       if (mounted) setState(() => _busyId = null);
     }
@@ -179,6 +141,7 @@ class _OutslipsPageState extends State<OutslipsPage> {
     }
     final id = fieldDbId(row);
     if (id.isEmpty || _busyId != null) return;
+    if (!canCreateDrFromOutslip(row, _lists)) return;
     setState(() => _busyId = id);
     try {
       final created = await confirmCreateDeliveryReceipt(context, widget.api, row);
@@ -206,7 +169,7 @@ class _OutslipsPageState extends State<OutslipsPage> {
     if (_creating) return;
     setState(() => _creating = true);
     try {
-      final created = await showCreateOutslipDialog(context, widget.api);
+      final created = await showCreateOutslipDialog(context, widget.api, lists: _lists);
       if (created != null) {
         await _load();
         if (!mounted) return;
@@ -369,7 +332,13 @@ class OutslipDetailPage extends StatelessWidget {
       title: outslip['id']?.toString() ?? 'Outslip',
       subtitle: customer,
       status: status,
-      actions: [
+      secondaryActions: [
+        PrintDocumentButton(
+          onPrint: () => printOutslip(outslip),
+          label: 'Print PDF',
+        ),
+      ],
+      primaryActions: [
         if (onApprove != null)
           FilledButton(
             onPressed: () async {
@@ -378,8 +347,7 @@ class OutslipDetailPage extends StatelessWidget {
             },
             child: const Text('Approve outslip'),
           ),
-        if (onDispatch != null) ...[
-          if (onApprove != null) const SizedBox(height: 8),
+        if (onDispatch != null)
           FilledButton(
             onPressed: () async {
               await onDispatch!();
@@ -387,26 +355,18 @@ class OutslipDetailPage extends StatelessWidget {
             },
             child: const Text('Mark for dispatch'),
           ),
-        ],
-        if (onCreateDr != null) ...[
-          if (onApprove != null || onDispatch != null) const SizedBox(height: 8),
+        if (onCreateDr != null)
           FilledButton.tonal(
-            onPressed: () async {
-              await onCreateDr!();
-            },
+            onPressed: () async => onCreateDr!(),
             child: const Text('Create delivery receipt'),
           ),
-        ],
       ],
       children: [
-        const SizedBox(height: 12),
-        Text(
-          'Date: ${outslip['displayDate'] ?? outslip['date'] ?? '—'}',
-          style: const TextStyle(color: AppTheme.textSecondary),
-        ),
-        Text(
-          'Receiving ID: ${outslip['receivingId'] ?? '—'}',
-          style: const TextStyle(color: AppTheme.textSecondary),
+        FieldDetailMeta(
+          rows: [
+            (label: 'Date', value: '${outslip['displayDate'] ?? outslip['date'] ?? '—'}'),
+            (label: 'Receiving', value: '${outslip['receivingId'] ?? '—'}'),
+          ],
         ),
         const SizedBox(height: 16),
         const FieldSectionTitle('Line items'),

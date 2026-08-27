@@ -6,11 +6,13 @@ import '../services/offline_cache.dart';
 import '../services/transaction_actions.dart';
 import '../services/transaction_lists.dart';
 import '../navigation/mobile_modules.dart';
+import '../navigation/module_navigation_scope.dart';
 import '../navigation/transaction_detail_host.dart';
 import '../navigation/transaction_navigation.dart';
 import '../theme/app_theme.dart';
 import '../widgets/field_ui.dart';
 import '../widgets/print_document_button.dart';
+import '../widgets/transaction_workflows.dart';
 import 'add_quotation_page.dart';
 
 class QuotationsPage extends StatefulWidget {
@@ -92,29 +94,12 @@ class _QuotationsPageState extends State<QuotationsPage> {
     }
     final id = fieldRowId(row);
     if (id.isEmpty || _busyId != null) return;
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Approve quotation?'),
-        content: Text('Approve ${row['id'] ?? id}?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Approve')),
-        ],
-      ),
-    );
-    if (ok != true) return;
+    if (!canApproveQuotation(row)) return;
 
     setState(() => _busyId = id);
     try {
-      await widget.api.put('/quotations/$id', {'status': 'approved'});
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Quotation approved.')));
-      await _load();
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyApiError(error))));
+      final updated = await approveQuotation(context, widget.api, row);
+      if (updated != null) await _load();
     } finally {
       if (mounted) setState(() => _busyId = null);
     }
@@ -127,29 +112,12 @@ class _QuotationsPageState extends State<QuotationsPage> {
     }
     final id = fieldRowId(row);
     if (id.isEmpty || _busyId != null) return;
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Cancel quotation?'),
-        content: Text('Cancel ${row['id'] ?? id}?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Back')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Cancel')),
-        ],
-      ),
-    );
-    if (ok != true) return;
+    if (!canCancelQuotation(row, _lists)) return;
 
     setState(() => _busyId = id);
     try {
-      await widget.api.post('/quotations/$id/cancel');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Quotation cancelled.')));
-      await _load();
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyApiError(error))));
+      final updated = await cancelQuotation(context, widget.api, row);
+      if (updated != null) await _load();
     } finally {
       if (mounted) setState(() => _busyId = null);
     }
@@ -162,78 +130,22 @@ class _QuotationsPageState extends State<QuotationsPage> {
     }
     final id = fieldRowId(row);
     if (id.isEmpty || _busyId != null) return;
-
-    List<Map<String, dynamic>> suppliers = [];
-    try {
-      suppliers = (await widget.api.getList('/setup/suppliers')).cast<Map<String, dynamic>>();
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyApiError(error))));
-      return;
-    }
-
-    final active = suppliers.where((s) => s['status'] != 'Inactive').toList();
-    if (active.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No active suppliers found in setup.')),
-      );
-      return;
-    }
-
-    var supplierId = active.first['id']?.toString() ?? '';
-    if (!mounted) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Convert to purchase order'),
-          content: DropdownButtonFormField<String>(
-            value: supplierId,
-            decoration: const InputDecoration(labelText: 'Supplier'),
-            items: active
-                .map(
-                  (s) => DropdownMenuItem(
-                    value: s['id']?.toString() ?? '',
-                    child: Text(s['name']?.toString() ?? 'Supplier'),
-                  ),
-                )
-                .toList(),
-            onChanged: (value) => setDialogState(() => supplierId = value ?? supplierId),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Convert')),
-          ],
-        ),
-      ),
-    );
-    if (confirmed != true || supplierId.isEmpty) return;
+    if (!canConvertQuotation(row, _lists)) return;
 
     setState(() => _busyId = id);
     try {
-      final response = await widget.api.post('/quotations/$id/convert-to-po', {
-        'supplierId': int.parse(supplierId),
-      });
-      if (!mounted) return;
-      final po = recordFromPayload(response);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Purchase order created from quotation.')),
-      );
-      await _load();
-      if (po != null) {
+      final created = await convertQuotationToPo(context, widget.api, row);
+      if (created != null) {
+        await _load();
         if (!mounted) return;
         await openCreatedTransaction(
           context,
           widget.api,
           MobileModule.purchaseOrders,
-          po,
+          created,
           popCurrentRoute: popCurrentRoute,
         );
       }
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyApiError(error))));
     } finally {
       if (mounted) setState(() => _busyId = null);
     }
@@ -249,7 +161,12 @@ class _QuotationsPageState extends State<QuotationsPage> {
     setState(() => _creating = true);
     try {
       final created = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(builder: (_) => AddQuotationPage(api: widget.api)),
+        MaterialPageRoute(
+          builder: (_) => wrapModuleNavigationScope(
+            context,
+            AddQuotationPage(api: widget.api),
+          ),
+        ),
       );
       if (created == true) {
         await _load();
@@ -313,7 +230,7 @@ class _QuotationsPageState extends State<QuotationsPage> {
             final busy = _busyId == id;
             final items = (row['items'] as List<dynamic>? ?? const []).length;
             final showApprove = canApproveQuotation(row);
-            final showCancel = canCancelQuotation(row);
+            final showCancel = canCancelQuotation(row, _lists);
             final showConvert = canConvertQuotation(row, _lists);
 
             return Card(
@@ -351,17 +268,16 @@ class _QuotationsPageState extends State<QuotationsPage> {
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          if (showApprove) ...[
+                          if (showApprove)
                             FilledButton(
                               onPressed: busy || _fromCache ? null : () => _approve(row),
                               child: Text(busy ? 'Working…' : 'Approve'),
                             ),
-                            if (showCancel)
-                              OutlinedButton(
-                                onPressed: busy || _fromCache ? null : () => _cancel(row),
-                                child: const Text('Cancel'),
-                              ),
-                          ],
+                          if (showCancel)
+                            OutlinedButton(
+                              onPressed: busy || _fromCache ? null : () => _cancel(row),
+                              child: const Text('Cancel'),
+                            ),
                           if (showConvert)
                             FilledButton.tonal(
                               onPressed: busy || _fromCache ? null : () => _convertToPo(row),
@@ -391,6 +307,7 @@ class QuotationDetailPage extends StatelessWidget {
     this.onApprove,
     this.onConvert,
     this.onCancel,
+    this.onEdit,
   });
 
   final ApiClient api;
@@ -399,6 +316,7 @@ class QuotationDetailPage extends StatelessWidget {
   final Future<void> Function()? onApprove;
   final Future<void> Function()? onConvert;
   final Future<void> Function()? onCancel;
+  final Future<void> Function()? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -411,7 +329,19 @@ class QuotationDetailPage extends StatelessWidget {
       title: quotation['id']?.toString() ?? 'Quotation',
       subtitle: quotation['customerName']?.toString() ?? 'Customer —',
       status: quotation['status']?.toString(),
-      actions: [
+      secondaryActions: [
+        if (onEdit != null)
+          OutlinedButton.icon(
+            onPressed: () async => onEdit!(),
+            icon: const Icon(Icons.edit_outlined),
+            label: const Text('Edit'),
+          ),
+        PrintDocumentButton(
+          onPrint: () => printQuotation(context, api, quotation),
+          label: 'Print PDF',
+        ),
+      ],
+      primaryActions: [
         if (onApprove != null)
           FilledButton(
             onPressed: () async {
@@ -420,17 +350,12 @@ class QuotationDetailPage extends StatelessWidget {
             },
             child: const Text('Approve'),
           ),
-        if (onConvert != null) ...[
-          if (onApprove != null) const SizedBox(height: 8),
+        if (onConvert != null)
           FilledButton.tonal(
-            onPressed: () async {
-              await onConvert!();
-            },
+            onPressed: () async => onConvert!(),
             child: const Text('Convert to PO'),
           ),
-        ],
-        if (onCancel != null) ...[
-          if (onApprove != null || onConvert != null) const SizedBox(height: 8),
+        if (onCancel != null)
           OutlinedButton(
             onPressed: () async {
               await onCancel!();
@@ -438,21 +363,16 @@ class QuotationDetailPage extends StatelessWidget {
             },
             child: const Text('Cancel quotation'),
           ),
-        ],
-        const SizedBox(height: 8),
-        PrintDocumentButton(
-          onPrint: () => printQuotation(context, api, quotation),
-        ),
       ],
       children: [
-        const SizedBox(height: 12),
-        Text(
-          'Date: ${quotation['displayDate'] ?? quotation['date'] ?? '—'}',
-          style: const TextStyle(color: AppTheme.textSecondary),
-        ),
-        Text(
-          'Total: ${fieldFormatMoney(quotation['total'])}',
-          style: const TextStyle(color: AppTheme.textSecondary),
+        FieldDetailMeta(
+          rows: [
+            (
+              label: 'Date',
+              value: '${quotation['displayDate'] ?? quotation['date'] ?? '—'}',
+            ),
+            (label: 'Total', value: fieldFormatMoney(quotation['total'])),
+          ],
         ),
         const SizedBox(height: 16),
         const FieldSectionTitle('Line items'),

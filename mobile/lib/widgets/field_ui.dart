@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../navigation/app_navigation.dart';
-import '../widgets/transactions_drawer.dart';
 import '../theme/app_theme.dart';
 
 String fieldRowId(Map<String, dynamic> row) =>
@@ -329,6 +328,69 @@ class FieldLineItems extends StatelessWidget {
   }
 }
 
+class FieldDetailMeta extends StatelessWidget {
+  const FieldDetailMeta({super.key, required this.rows});
+
+  final List<({String label, String value})> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < rows.length; i++) ...[
+          if (i > 0) const SizedBox(height: 6),
+          Text.rich(
+            TextSpan(
+              style: const TextStyle(fontSize: 14, height: 1.45, color: AppTheme.textSecondary),
+              children: [
+                TextSpan(
+                  text: '${rows[i].label}: ',
+                  style: const TextStyle(fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
+                ),
+                TextSpan(text: rows[i].value),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Groups outline/print actions in a row; workflow buttons stack full-width below.
+class FieldDetailActions extends StatelessWidget {
+  const FieldDetailActions({
+    super.key,
+    this.secondary = const [],
+    this.primary = const [],
+  });
+
+  final List<Widget> secondary;
+  final List<Widget> primary;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (secondary.isNotEmpty) ...[
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: secondary,
+          ),
+          if (primary.isNotEmpty) const SizedBox(height: 12),
+        ],
+        for (var i = 0; i < primary.length; i++) ...[
+          if (i > 0) const SizedBox(height: 8),
+          primary[i],
+        ],
+      ],
+    );
+  }
+}
+
 class FieldDetailScaffold extends StatelessWidget {
   const FieldDetailScaffold({
     super.key,
@@ -336,6 +398,8 @@ class FieldDetailScaffold extends StatelessWidget {
     required this.subtitle,
     required this.status,
     required this.children,
+    this.secondaryActions,
+    this.primaryActions,
     this.actions,
   });
 
@@ -343,13 +407,18 @@ class FieldDetailScaffold extends StatelessWidget {
   final String subtitle;
   final String? status;
   final List<Widget> children;
+  final List<Widget>? secondaryActions;
+  final List<Widget>? primaryActions;
   final List<Widget>? actions;
 
   @override
   Widget build(BuildContext context) {
+    final secondary = secondaryActions ?? const [];
+    final primary = primaryActions ?? actions ?? const [];
+    final hasActions = secondary.isNotEmpty || primary.isNotEmpty;
+
     return Scaffold(
-      appBar: transactionAppBar(context, title: title),
-      drawer: moduleTransactionDrawer(context),
+      appBar: transactionAppBar(context, title: title, showBack: true),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -365,20 +434,36 @@ class FieldDetailScaffold extends StatelessWidget {
                       Expanded(
                         child: Text(
                           subtitle,
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            height: 1.3,
+                          ),
                         ),
                       ),
-                      if (status != null) FieldStatusChip(status),
+                      if (status != null) ...[
+                        const SizedBox(width: 8),
+                        FieldStatusChip(status),
+                      ],
                     ],
                   ),
+                  if (children.isNotEmpty) const SizedBox(height: 12),
                   ...children,
                 ],
               ),
             ),
           ),
-          if (actions != null && actions!.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            ...actions!,
+          if (hasActions) ...[
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: FieldDetailActions(
+                  secondary: secondary,
+                  primary: primary,
+                ),
+              ),
+            ),
           ],
         ],
       ),

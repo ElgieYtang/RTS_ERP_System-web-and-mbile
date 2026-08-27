@@ -30,11 +30,6 @@ class _ShellPageState extends State<ShellPage> {
     final api = _api;
     if (api == null) return;
 
-    final scaffold = Scaffold.maybeOf(context);
-    if (scaffold?.isDrawerOpen ?? false) {
-      Navigator.pop(context);
-    }
-
     final onModuleShell = ModalRoute.of(context)?.settings.name == 'module';
 
     if (onModuleShell) {
@@ -71,8 +66,17 @@ class _ShellPageState extends State<ShellPage> {
     final auth = context.watch<AuthState>();
 
     return Scaffold(
+      backgroundColor: AppTheme.page,
       appBar: AppBar(
-        title: const BrandAppBarTitle(title: 'Home'),
+        automaticallyImplyLeading: false,
+        title: const BrandLogo(size: 28),
+        bottom: PreferredSize(
+          preferredSize: Size.zero,
+          child: Container(
+            height: 1,
+            color: Colors.white.withValues(alpha: 0.14),
+          ),
+        ),
         actions: [
           PopupMenuButton<String>(
             icon: CircleAvatar(
@@ -111,9 +115,6 @@ class _ShellPageState extends State<ShellPage> {
           ),
           const SizedBox(width: 8),
         ],
-      ),
-      drawer: TransactionsDrawer(
-        onOpenModule: (module) => _openModule(context, module),
       ),
       body: HomePage(
         key: _homeKey,

@@ -292,6 +292,93 @@ class DocumentPrint {
     );
   }
 
+  static Future<void> shareReceiving(Map<String, dynamic> receiving) async {
+    final items = _itemsFromRow(receiving);
+    final total = _grandTotal(receiving, items);
+    final bytes = await _buildPdf((logo) => [
+          DocumentPdfLayout.letterhead(logo),
+          pw.SizedBox(height: 8),
+          DocumentPdfLayout.doubleRule(),
+          pw.SizedBox(height: 8),
+          DocumentPdfLayout.centeredTitle('RECEIVING REPORT'),
+          pw.SizedBox(height: 8),
+          DocumentPdfLayout.doubleRule(),
+          pw.SizedBox(height: 4),
+          DocumentPdfLayout.fieldLine('Receiving No.:', receiving['id']?.toString()),
+          DocumentPdfLayout.fieldLine(
+            'Date:',
+            receiving['displayDate']?.toString() ?? receiving['date']?.toString(),
+          ),
+          DocumentPdfLayout.fieldLine('Supplier:', receiving['supplierName']?.toString()),
+          DocumentPdfLayout.fieldLine('Purchase Order:', receiving['purchaseOrderId']?.toString()),
+          DocumentPdfLayout.fieldLine('Status:', receiving['status']?.toString()),
+          pw.SizedBox(height: 8),
+          DocumentPdfLayout.singleRule(),
+          DocumentPdfLayout.buildQuotationTable(items: items, headerColor: DocumentPdfLayout.grayHeader),
+          DocumentPdfLayout.grandTotal(total),
+        ]);
+    await Printing.sharePdf(bytes: bytes, filename: '${receiving['id'] ?? 'receiving'}.pdf');
+  }
+
+  static Future<void> shareOutslip(Map<String, dynamic> outslip) async {
+    final items = _itemsFromRow(outslip);
+    final total = _grandTotal(outslip, items);
+    final bytes = await _buildPdf((logo) => [
+          DocumentPdfLayout.letterhead(logo),
+          pw.SizedBox(height: 8),
+          DocumentPdfLayout.doubleRule(),
+          pw.SizedBox(height: 8),
+          DocumentPdfLayout.centeredTitle('OUTSLIP'),
+          pw.SizedBox(height: 8),
+          DocumentPdfLayout.doubleRule(),
+          pw.SizedBox(height: 4),
+          DocumentPdfLayout.fieldLine('Outslip No.:', outslip['id']?.toString()),
+          DocumentPdfLayout.fieldLine(
+            'Date:',
+            outslip['displayDate']?.toString() ?? outslip['date']?.toString(),
+          ),
+          DocumentPdfLayout.fieldLine('Customer:', outslip['customerName']?.toString()),
+          DocumentPdfLayout.fieldLine('Receiving:', outslip['receivingId']?.toString()),
+          DocumentPdfLayout.fieldLine('Status:', outslip['status']?.toString()),
+          pw.SizedBox(height: 8),
+          DocumentPdfLayout.singleRule(),
+          DocumentPdfLayout.buildQuotationTable(items: items, headerColor: DocumentPdfLayout.grayHeader),
+          DocumentPdfLayout.grandTotal(total),
+        ]);
+    await Printing.sharePdf(bytes: bytes, filename: '${outslip['id'] ?? 'outslip'}.pdf');
+  }
+
+  static Future<void> shareBilling(Map<String, dynamic> billing) async {
+    final total = (billing['total'] as num?)?.toDouble() ?? 0;
+    final paid = (billing['paidAmount'] as num?)?.toDouble() ?? 0;
+    final balance = (total - paid).clamp(0, double.infinity);
+    final bytes = await _buildPdf((logo) => [
+          DocumentPdfLayout.letterhead(logo),
+          pw.SizedBox(height: 8),
+          DocumentPdfLayout.doubleRule(),
+          pw.SizedBox(height: 8),
+          DocumentPdfLayout.centeredTitle('BILLING STATEMENT'),
+          pw.SizedBox(height: 8),
+          DocumentPdfLayout.doubleRule(),
+          pw.SizedBox(height: 4),
+          DocumentPdfLayout.fieldLine('Billing No.:', billing['id']?.toString()),
+          DocumentPdfLayout.fieldLine(
+            'Date:',
+            billing['displayDate']?.toString() ?? billing['billingDate']?.toString(),
+          ),
+          DocumentPdfLayout.fieldLine('Customer:', billing['customerName']?.toString()),
+          DocumentPdfLayout.fieldLine('Delivery receipt:', billing['referenceDrId']?.toString()),
+          DocumentPdfLayout.fieldLine('Payment status:', billing['paymentStatus']?.toString()),
+          pw.SizedBox(height: 8),
+          DocumentPdfLayout.fieldLine('Total amount:', DocumentPdfLayout.formatMoney(total)),
+          DocumentPdfLayout.fieldLine('Amount paid:', DocumentPdfLayout.formatMoney(paid)),
+          DocumentPdfLayout.fieldLine('Balance due:', DocumentPdfLayout.formatMoney(balance)),
+          pw.SizedBox(height: 16),
+          DocumentPdfLayout.soaFooter(),
+        ]);
+    await Printing.sharePdf(bytes: bytes, filename: '${billing['id'] ?? 'billing'}.pdf');
+  }
+
   static List<Map<String, dynamic>> _itemsFromRow(Map<String, dynamic> row) {
     return (row['items'] as List<dynamic>? ?? const [])
         .whereType<Map>()

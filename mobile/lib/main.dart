@@ -63,19 +63,19 @@ class _BootSplash extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return const Scaffold(
       backgroundColor: AppTheme.page,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const BrandLogo(
+            BrandLogo(
               size: 72,
               showLabel: true,
               labelColor: AppTheme.maroon,
             ),
-            const SizedBox(height: 28),
-            const SizedBox(
+            SizedBox(height: 28),
+            SizedBox(
               width: 28,
               height: 28,
               child: CircularProgressIndicator(

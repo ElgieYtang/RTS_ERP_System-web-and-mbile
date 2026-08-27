@@ -7,9 +7,9 @@ import '../services/transaction_actions.dart';
 import '../services/transaction_lists.dart';
 import 'field_ui.dart';
 
-bool isOutslipReadyForDr(String? status) {
-  final value = (status ?? '').toLowerCase();
-  return value == 'for_dispatch' || value == 'released';
+void showTransactionActionBlocked(BuildContext context, String message) {
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 }
 
 Future<Map<String, dynamic>?> showCreateOutslipDialog(
@@ -17,6 +17,7 @@ Future<Map<String, dynamic>?> showCreateOutslipDialog(
   ApiClient api, {
   String? initialReceivingDbId,
   List<Map<String, dynamic>>? completedReceivings,
+  TransactionLists? lists,
 }) async {
   List<Map<String, dynamic>> customers = [];
   List<Map<String, dynamic>> receivings = completedReceivings ?? [];
@@ -52,6 +53,18 @@ Future<Map<String, dynamic>?> showCreateOutslipDialog(
     return null;
   }
 
+  if (lists != null) {
+    receivings = receivings
+        .where((row) => canCreateOutslipFromReceiving(row, lists))
+        .toList();
+    if (receivings.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No receivings are ready for a new outslip.')),
+      );
+      return null;
+    }
+  }
+
   var customerId = customers.first['id']?.toString() ?? '';
   var receivingDbId = initialReceivingDbId ??
       receivings.first['dbId']?.toString() ??
@@ -68,6 +81,7 @@ Future<Map<String, dynamic>?> showCreateOutslipDialog(
             mainAxisSize: MainAxisSize.min,
             children: [
               DropdownButtonFormField<String>(
+                key: ValueKey('outslip-customer-$customerId'),
                 initialValue: customerId,
                 decoration: const InputDecoration(
                   labelText: 'Customer',
@@ -85,6 +99,7 @@ Future<Map<String, dynamic>?> showCreateOutslipDialog(
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
+                key: ValueKey('outslip-receiving-$receivingDbId'),
                 initialValue: receivingDbId,
                 decoration: const InputDecoration(
                   labelText: 'From receiving (completed)',
@@ -146,6 +161,16 @@ Future<Map<String, dynamic>?> confirmCreateDeliveryReceipt(
   ApiClient api,
   Map<String, dynamic> outslip,
 ) async {
+  final lists = await TransactionLists.load(api);
+  if (!context.mounted) return null;
+  if (!canCreateDrFromOutslip(outslip, lists)) {
+    showTransactionActionBlocked(
+      context,
+      'This outslip is not ready for a delivery receipt.',
+    );
+    return null;
+  }
+
   final outslipId = int.tryParse(fieldDbId(outslip));
   if (outslipId == null) return null;
 
@@ -227,6 +252,11 @@ Future<Map<String, dynamic>?> confirmReceiving(
   ApiClient api,
   Map<String, dynamic> receiving,
 ) async {
+  if (!canConfirmReceiving(receiving)) {
+    showTransactionActionBlocked(context, 'This receiving is already completed.');
+    return null;
+  }
+
   final id = fieldDbId(receiving);
   if (id.isEmpty) return null;
 
@@ -262,11 +292,23 @@ Future<Map<String, dynamic>?> createOutslipFromReceiving(
   BuildContext context,
   ApiClient api,
   Map<String, dynamic> receiving,
-) {
+) async {
+  final lists = await TransactionLists.load(api);
+  if (!context.mounted) return null;
+  if (!canCreateOutslipFromReceiving(receiving, lists)) {
+    showTransactionActionBlocked(
+      context,
+      'An outslip already exists or this receiving is not completed.',
+    );
+    return null;
+  }
+
   return showCreateOutslipDialog(
     context,
     api,
     initialReceivingDbId: fieldDbId(receiving),
+    lists: lists,
+    completedReceivings: [receiving],
   );
 }
 
@@ -275,6 +317,11 @@ Future<Map<String, dynamic>?> approveOutslip(
   ApiClient api,
   Map<String, dynamic> outslip,
 ) async {
+  if (!canApproveOutslip(outslip)) {
+    showTransactionActionBlocked(context, 'Only pending outslips can be approved.');
+    return null;
+  }
+
   final id = fieldDbId(outslip);
   if (id.isEmpty) return null;
 
@@ -311,6 +358,11 @@ Future<Map<String, dynamic>?> dispatchOutslip(
   ApiClient api,
   Map<String, dynamic> outslip,
 ) async {
+  if (!canDispatchOutslip(outslip)) {
+    showTransactionActionBlocked(context, 'Only approved outslips can be dispatched.');
+    return null;
+  }
+
   final id = fieldDbId(outslip);
   if (id.isEmpty) return null;
 
@@ -348,6 +400,11 @@ Future<Map<String, dynamic>?> updateDeliveryStatus(
   Map<String, dynamic> delivery,
   String status,
 ) async {
+  if (!canUpdateDeliveryStatus(delivery, status)) {
+    showTransactionActionBlocked(context, 'This delivery cannot move to that status.');
+    return null;
+  }
+
   final id = fieldDbId(delivery);
   if (id.isEmpty) return null;
 
@@ -385,6 +442,11 @@ Future<Map<String, dynamic>?> recordBillingPayment(
   ApiClient api,
   Map<String, dynamic> billing,
 ) async {
+  if (!canRecordBillingPayment(billing)) {
+    showTransactionActionBlocked(context, 'This billing is already paid.');
+    return null;
+  }
+
   final id = fieldRowId(billing);
   if (id.isEmpty) return null;
 
@@ -459,11 +521,116 @@ Future<Map<String, dynamic>?> recordBillingPayment(
   }
 }
 
+Future<Map<String, dynamic>?> editQuotation(
+  BuildContext context,
+  ApiClient api,
+  Map<String, dynamic> quotation,
+) async {
+  final lists = await TransactionLists.load(api);
+  if (!context.mounted) return null;
+  if (!canEditQuotation(quotation, lists)) {
+    showTransactionActionBlocked(
+      context,
+      'This quotation cannot be edited after a purchase order exists.',
+    );
+    return null;
+  }
+
+  final id = fieldRowId(quotation);
+  if (id.isEmpty) return null;
+
+  final rawDate = quotation['date']?.toString() ?? '';
+  var selectedDate = DateTime.tryParse(rawDate) ?? DateTime.now();
+  var status = quotation['status']?.toString() ?? 'pending';
+
+  if (!context.mounted) return null;
+  final saved = await showDialog<bool>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: const Text('Edit quotation'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Date'),
+                subtitle: Text(
+                  '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}',
+                ),
+                trailing: const Icon(Icons.calendar_today_outlined),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: selectedDate,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2100),
+                  );
+                  if (picked != null) {
+                    setDialogState(() => selectedDate = picked);
+                  }
+                },
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                initialValue: status,
+                decoration: const InputDecoration(
+                  labelText: 'Status',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'pending', child: Text('Pending')),
+                  DropdownMenuItem(value: 'approved', child: Text('Approved')),
+                  DropdownMenuItem(value: 'rejected', child: Text('Rejected')),
+                ],
+                onChanged: (value) {
+                  if (value != null) setDialogState(() => status = value);
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Save')),
+        ],
+      ),
+    ),
+  );
+  if (saved != true) return null;
+
+  final dateStr =
+      '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
+
+  try {
+    final response = await api.put('/quotations/$id', {
+      'date': dateStr,
+      'status': status,
+    });
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Quotation updated.')),
+      );
+    }
+    return recordFromPayload(response);
+  } catch (error) {
+    if (!context.mounted) return null;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyApiError(error))));
+    return null;
+  }
+}
+
 Future<Map<String, dynamic>?> approveQuotation(
   BuildContext context,
   ApiClient api,
   Map<String, dynamic> quotation,
 ) async {
+  if (!canApproveQuotation(quotation)) {
+    showTransactionActionBlocked(context, 'Only pending quotations can be approved.');
+    return null;
+  }
+
   final id = fieldRowId(quotation);
   if (id.isEmpty) return null;
 
@@ -500,9 +667,20 @@ Future<Map<String, dynamic>?> cancelQuotation(
   ApiClient api,
   Map<String, dynamic> quotation,
 ) async {
+  final lists = await TransactionLists.load(api);
+  if (!context.mounted) return null;
+  if (!canCancelQuotation(quotation, lists)) {
+    showTransactionActionBlocked(
+      context,
+      'This quotation cannot be cancelled after a purchase order exists.',
+    );
+    return null;
+  }
+
   final id = fieldRowId(quotation);
   if (id.isEmpty) return null;
 
+  if (!context.mounted) return null;
   final ok = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
@@ -536,6 +714,16 @@ Future<Map<String, dynamic>?> convertQuotationToPo(
   ApiClient api,
   Map<String, dynamic> quotation,
 ) async {
+  final lists = await TransactionLists.load(api);
+  if (!context.mounted) return null;
+  if (!canConvertQuotation(quotation, lists)) {
+    showTransactionActionBlocked(
+      context,
+      'Only approved quotations without a PO can be converted.',
+    );
+    return null;
+  }
+
   final id = fieldRowId(quotation);
   if (id.isEmpty) return null;
 
@@ -566,7 +754,8 @@ Future<Map<String, dynamic>?> convertQuotationToPo(
       builder: (context, setDialogState) => AlertDialog(
         title: const Text('Convert to purchase order'),
         content: DropdownButtonFormField<String>(
-          value: supplierId,
+          key: ValueKey('convert-supplier-$supplierId'),
+          initialValue: supplierId,
           decoration: const InputDecoration(labelText: 'Supplier'),
           items: active
               .map(
@@ -609,6 +798,16 @@ Future<Map<String, dynamic>?> confirmCreateBilling(
   ApiClient api,
   Map<String, dynamic> delivery,
 ) async {
+  final lists = await TransactionLists.load(api);
+  if (!context.mounted) return null;
+  if (!canCreateBillingFromDelivery(delivery, lists)) {
+    showTransactionActionBlocked(
+      context,
+      'Billing already exists or delivery is not marked delivered.',
+    );
+    return null;
+  }
+
   final deliveryId = int.tryParse(fieldDbId(delivery));
   if (deliveryId == null) return null;
 
