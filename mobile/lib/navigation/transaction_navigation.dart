@@ -51,6 +51,7 @@ Widget buildTransactionDetailPage({
   Future<void> Function()? onApproveQuotation,
   Future<void> Function()? onConvert,
   Future<void> Function()? onCancel,
+  Future<void> Function()? onEdit,
 }) {
   switch (module) {
     case MobileModule.purchaseOrders:
@@ -98,6 +99,7 @@ Widget buildTransactionDetailPage({
         onApprove: onApproveQuotation,
         onConvert: onConvert,
         onCancel: onCancel,
+        onEdit: onEdit,
       );
     default:
       return Scaffold(

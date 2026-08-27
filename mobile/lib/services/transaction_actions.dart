@@ -6,22 +6,41 @@ bool _idsMatch(dynamic a, dynamic b) {
   return a.toString() == b.toString();
 }
 
+String? _quotationPublicId(Map<String, dynamic> quotation) =>
+    quotation['id']?.toString();
+
 Map<String, dynamic>? findPoForQuotation(
   Map<String, dynamic> quotation,
   TransactionLists lists,
 ) {
+  final qtnId = _quotationPublicId(quotation);
+  final qtnDb = fieldDbId(quotation);
   for (final po in lists.purchaseOrders) {
-    if (_idsMatch(po['referenceQuotationId'], quotation['id']) ||
-        _idsMatch(po['referenceQuotationId'], quotation['dbId'])) {
+    if (_idsMatch(po['referenceQuotationId'], qtnId) ||
+        _idsMatch(po['referenceQuotationId'], qtnDb) ||
+        _idsMatch(po['referenceQuotationNo'], qtnId)) {
       return po;
     }
   }
   return null;
 }
 
-bool canApproveQuotation(Map<String, dynamic> row) => row['status']?.toString() == 'pending';
+bool canApproveQuotation(Map<String, dynamic> row) =>
+    row['status']?.toString() == 'pending';
 
-bool canCancelQuotation(Map<String, dynamic> row) => row['status']?.toString() == 'pending';
+/// Cancel when not already cancelled and no PO has been created from this quotation.
+bool canCancelQuotation(Map<String, dynamic> row, TransactionLists lists) {
+  final status = row['status']?.toString() ?? '';
+  if (status == 'cancelled') return false;
+  return findPoForQuotation(row, lists) == null;
+}
+
+/// Edit date/status when not cancelled and no PO has been created yet.
+bool canEditQuotation(Map<String, dynamic> row, TransactionLists lists) {
+  final status = row['status']?.toString() ?? '';
+  if (status == 'cancelled') return false;
+  return findPoForQuotation(row, lists) == null;
+}
 
 bool canConvertQuotation(Map<String, dynamic> row, TransactionLists lists) =>
     row['status']?.toString() == 'approved' && findPoForQuotation(row, lists) == null;
@@ -42,14 +61,18 @@ bool canReceivePurchaseOrder(Map<String, dynamic> po, TransactionLists lists) {
   return !hasOpenReceivingForPo(po, lists);
 }
 
-bool canConfirmReceiving(Map<String, dynamic> row) => row['status']?.toString() != 'completed';
+bool canConfirmReceiving(Map<String, dynamic> row) =>
+    row['status']?.toString() != 'completed';
 
 bool hasOutslipForReceiving(Map<String, dynamic> receiving, TransactionLists lists) {
   final rcvDb = fieldDbId(receiving);
   return lists.outslips.any((row) => _idsMatch(row['receivingId'], rcvDb));
 }
 
-bool canCreateOutslipFromReceiving(Map<String, dynamic> receiving, TransactionLists lists) =>
+bool canCreateOutslipFromReceiving(
+  Map<String, dynamic> receiving,
+  TransactionLists lists,
+) =>
     receiving['status']?.toString() == 'completed' &&
     !hasOutslipForReceiving(receiving, lists);
 
@@ -82,6 +105,17 @@ bool canMarkDeliveryDelivered(Map<String, dynamic> row) {
   return status == 'active' || status == 'out_for_delivery';
 }
 
+bool canUpdateDeliveryStatus(Map<String, dynamic> delivery, String nextStatus) {
+  switch (nextStatus) {
+    case 'out_for_delivery':
+      return canMarkDeliveryOut(delivery);
+    case 'delivered':
+      return canMarkDeliveryDelivered(delivery);
+    default:
+      return false;
+  }
+}
+
 bool hasBillingForDelivery(Map<String, dynamic> delivery, TransactionLists lists) {
   final drDb = fieldDbId(delivery);
   final drNo = delivery['id']?.toString();
@@ -97,6 +131,11 @@ bool canRecordBillingPayment(Map<String, dynamic> row) =>
     row['paymentStatus']?.toString() != 'paid';
 
 bool canApproveAccomplishment(Map<String, dynamic> row) {
+  final status = row['status']?.toString() ?? '';
+  return status != 'approved' && status != 'inactive';
+}
+
+bool canEditAccomplishment(Map<String, dynamic> row) {
   final status = row['status']?.toString() ?? '';
   return status != 'approved' && status != 'inactive';
 }

@@ -8,7 +8,6 @@ import '../navigation/transaction_detail_host.dart';
 import '../navigation/transaction_navigation.dart';
 import '../services/transaction_actions.dart';
 import '../services/transaction_lists.dart';
-import '../theme/app_theme.dart';
 import '../widgets/field_ui.dart';
 import '../widgets/print_document_button.dart';
 import '../widgets/transaction_workflows.dart';
@@ -102,32 +101,12 @@ class _DeliveriesPageState extends State<DeliveriesPage> {
 
     final id = row['dbId']?.toString() ?? row['id']?.toString();
     if (id == null || _busyId != null) return;
-
-    final label = fieldStatusLabel(status);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Mark as $label?'),
-        content: Text('Update ${row['id'] ?? id} to "$label".'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Update')),
-        ],
-      ),
-    );
-    if (ok != true) return;
+    if (!canUpdateDeliveryStatus(row, status)) return;
 
     setState(() => _busyId = id);
     try {
-      await widget.api.post('/delivery-receipts/$id/status', {'status': status});
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Updated to $label')),
-      );
-      await _load();
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyApiError(error))));
+      final updated = await updateDeliveryStatus(context, widget.api, row, status);
+      if (updated != null) await _load();
     } finally {
       if (mounted) setState(() => _busyId = null);
     }
@@ -140,6 +119,7 @@ class _DeliveriesPageState extends State<DeliveriesPage> {
     }
     final id = fieldDbId(row);
     if (id.isEmpty || _busyId != null) return;
+    if (!canCreateBillingFromDelivery(row, _lists)) return;
     setState(() => _busyId = id);
     try {
       final created = await confirmCreateBilling(context, widget.api, row);
@@ -302,7 +282,13 @@ class DeliveryDetailPage extends StatelessWidget {
       title: delivery['id']?.toString() ?? 'Delivery',
       subtitle: customer,
       status: status,
-      actions: [
+      secondaryActions: [
+        PrintDocumentButton(
+          onPrint: () => printDeliveryReceipt(context, api, delivery),
+          label: 'Print PDF',
+        ),
+      ],
+      primaryActions: [
         if (onSetStatus != null && canMarkDeliveryOut(delivery))
           FilledButton(
             onPressed: () async {
@@ -311,8 +297,7 @@ class DeliveryDetailPage extends StatelessWidget {
             },
             child: const Text('Out for delivery'),
           ),
-        if (onSetStatus != null && canMarkDeliveryDelivered(delivery)) ...[
-          if (canMarkDeliveryOut(delivery)) const SizedBox(height: 8),
+        if (onSetStatus != null && canMarkDeliveryDelivered(delivery))
           FilledButton.tonal(
             onPressed: () async {
               await onSetStatus!('delivered');
@@ -320,36 +305,21 @@ class DeliveryDetailPage extends StatelessWidget {
             },
             child: const Text('Mark delivered'),
           ),
-        ],
-        if (onCreateBilling != null) ...[
-          if (onSetStatus != null &&
-              (canMarkDeliveryOut(delivery) || canMarkDeliveryDelivered(delivery)))
-            const SizedBox(height: 8),
+        if (onCreateBilling != null)
           FilledButton(
-            onPressed: () async {
-              await onCreateBilling!();
-            },
+            onPressed: () async => onCreateBilling!(),
             child: const Text('Create billing'),
           ),
-        ],
-        const SizedBox(height: 8),
-        PrintDocumentButton(
-          onPrint: () => printDeliveryReceipt(context, api, delivery),
-          label: 'Print delivery receipt',
-        ),
       ],
       children: [
-        const SizedBox(height: 12),
-        Text(
-          'Date: ${delivery['displayDate'] ?? delivery['date'] ?? '—'}',
-          style: const TextStyle(color: AppTheme.textSecondary),
+        FieldDetailMeta(
+          rows: [
+            (label: 'Date', value: '${delivery['displayDate'] ?? delivery['date'] ?? '—'}'),
+            (label: 'Outslip', value: '${delivery['referenceOutslipId'] ?? '—'}'),
+            if (delivery['total'] != null)
+              (label: 'Total', value: '${delivery['total']}'),
+          ],
         ),
-        Text(
-          'Outslip: ${delivery['referenceOutslipId'] ?? '—'}',
-          style: const TextStyle(color: AppTheme.textSecondary),
-        ),
-        if (delivery['total'] != null)
-          Text('Total: ${delivery['total']}', style: const TextStyle(color: AppTheme.textSecondary)),
         const SizedBox(height: 16),
         const FieldSectionTitle('Line items'),
         FieldLineItems(items: items),

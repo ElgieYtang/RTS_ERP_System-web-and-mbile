@@ -46,3 +46,9 @@ Future<void> printSoa({
   required Map<String, dynamic> account,
 }) =>
     DocumentPrint.shareSoa(customer: customer, account: account);
+
+Future<void> printReceiving(Map<String, dynamic> row) => DocumentPrint.shareReceiving(row);
+
+Future<void> printOutslip(Map<String, dynamic> row) => DocumentPrint.shareOutslip(row);
+
+Future<void> printBilling(Map<String, dynamic> row) => DocumentPrint.shareBilling(row);

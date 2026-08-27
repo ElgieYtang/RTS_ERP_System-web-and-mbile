@@ -24,9 +24,9 @@ class AccomplishmentPdf {
   static const _border = PdfColors.black;
   static const _borderWidth = 1.0;
   static const _cellPadding = pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5);
-  static final _borderSide = pw.BorderSide(color: _border, width: _borderWidth);
+  static const _borderSide = pw.BorderSide(color: _border, width: _borderWidth);
 
-  static final _labelStyle = pw.TextStyle(
+  static const _labelStyle = pw.TextStyle(
     fontSize: 9,
     fontWeight: pw.FontWeight.bold,
   );
@@ -36,7 +36,7 @@ class AccomplishmentPdf {
     fontWeight: pw.FontWeight.bold,
     letterSpacing: 0.5,
   );
-  static final _companyNameStyle = pw.TextStyle(
+  static const _companyNameStyle = pw.TextStyle(
     fontSize: 10,
     fontWeight: pw.FontWeight.bold,
     letterSpacing: 0.2,
@@ -391,7 +391,7 @@ class AccomplishmentPdf {
           pw.SizedBox(height: 40),
           pw.Text(
             name.toUpperCase(),
-            style: pw.TextStyle(
+            style: const pw.TextStyle(
               fontSize: 9,
               fontWeight: pw.FontWeight.bold,
               decoration: pw.TextDecoration.underline,

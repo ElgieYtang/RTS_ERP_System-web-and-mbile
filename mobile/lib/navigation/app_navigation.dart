@@ -6,32 +6,36 @@ void goHome(BuildContext context) {
 
 Widget homeAppBarButton(BuildContext context) {
   return IconButton(
-    icon: const Icon(Icons.home_rounded),
-    tooltip: 'Home',
+    icon: const Icon(Icons.dashboard_rounded),
+    tooltip: 'Dashboard',
     onPressed: () => goHome(context),
   );
 }
 
-Widget menuAppBarButton(BuildContext context) {
-  return Builder(
-    builder: (context) => IconButton(
-      icon: const Icon(Icons.menu_rounded),
-      tooltip: 'Menu',
-      onPressed: () => Scaffold.of(context).openDrawer(),
-    ),
+Widget backAppBarButton(BuildContext context) {
+  return IconButton(
+    icon: const Icon(Icons.arrow_back_rounded),
+    tooltip: 'Back',
+    onPressed: () => Navigator.of(context).maybePop(),
   );
 }
 
-/// Standard transaction app bar: menu left, title center, home right.
+/// Module lists: back to dashboard + home shortcut.
+/// Detail screens: back + optional actions + dashboard shortcut.
 PreferredSizeWidget transactionAppBar(
   BuildContext context, {
   required String title,
   List<Widget>? extraActions,
+  bool showBack = false,
 }) {
   return AppBar(
     automaticallyImplyLeading: false,
-    leading: menuAppBarButton(context),
-    title: Text(title),
+    leading: backAppBarButton(context),
+    title: Text(
+      title,
+      overflow: TextOverflow.ellipsis,
+      maxLines: 1,
+    ),
     actions: [
       if (extraActions != null) ...extraActions,
       homeAppBarButton(context),

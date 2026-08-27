@@ -6,9 +6,9 @@ import '../services/api_client.dart';
 import '../services/api_errors.dart';
 import '../services/transaction_actions.dart';
 import '../services/transaction_lists.dart';
+import '../navigation/module_navigation_scope.dart';
 import 'transaction_navigation.dart';
 import '../widgets/transaction_workflows.dart';
-import '../widgets/transactions_drawer.dart';
 
 /// Detail screen with live workflow buttons — used for list open and post-create navigation.
 class TransactionDetailHost extends StatefulWidget {
@@ -62,10 +62,13 @@ class _TransactionDetailHostState extends State<TransactionDetailHost> {
     if (!mounted) return;
     await Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => TransactionDetailHost(
-          api: widget.api,
-          module: module,
-          initialRecord: record,
+        builder: (_) => wrapModuleNavigationScope(
+          context,
+          TransactionDetailHost(
+            api: widget.api,
+            module: module,
+            initialRecord: record,
+          ),
         ),
       ),
     );
@@ -91,8 +94,7 @@ class _TransactionDetailHostState extends State<TransactionDetailHost> {
   Widget build(BuildContext context) {
     if (_loadingLists) {
       return Scaffold(
-        appBar: transactionAppBar(context, title: _titleForRecord()),
-        drawer: moduleTransactionDrawer(context),
+        appBar: transactionAppBar(context, title: _titleForRecord(), showBack: true),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -200,9 +202,16 @@ class _TransactionDetailHostState extends State<TransactionDetailHost> {
                 if (next != null) await _handoff(MobileModule.purchaseOrders, next);
               })
           : null,
-      onCancel: widget.module == MobileModule.quotations && canCancelQuotation(_record)
+      onCancel: widget.module == MobileModule.quotations &&
+              canCancelQuotation(_record, _lists)
           ? () => _run(() async {
                 final updated = await cancelQuotation(context, widget.api, _record);
+                if (updated != null) await _refreshRecord(updated);
+              })
+          : null,
+      onEdit: widget.module == MobileModule.quotations && canEditQuotation(_record, _lists)
+          ? () => _run(() async {
+                final updated = await editQuotation(context, widget.api, _record);
                 if (updated != null) await _refreshRecord(updated);
               })
           : null,
@@ -222,10 +231,13 @@ Future<void> pushTransactionDetail(
 ) {
   return Navigator.of(context).push(
     MaterialPageRoute(
-      builder: (_) => TransactionDetailHost(
-        api: api,
-        module: module,
-        initialRecord: record,
+      builder: (_) => wrapModuleNavigationScope(
+        context,
+        TransactionDetailHost(
+          api: api,
+          module: module,
+          initialRecord: record,
+        ),
       ),
     ),
   );

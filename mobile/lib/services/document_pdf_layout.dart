@@ -12,13 +12,13 @@ class DocumentPdfLayout {
   static const margin = pw.EdgeInsets.fromLTRB(34, 28, 34, 34);
 
   static final money = NumberFormat('#,##0.00', 'en_PH');
-  static final greenHeader = PdfColor.fromInt(0xFFC6E0B4);
-  static final grayHeader = PdfColor.fromInt(0xFFD9D9D9);
-  static final blueBar = PdfColor.fromInt(0xFFD9E8F7);
+  static const greenHeader = PdfColor.fromInt(0xFFC6E0B4);
+  static const grayHeader = PdfColor.fromInt(0xFFD9D9D9);
+  static const blueBar = PdfColor.fromInt(0xFFD9E8F7);
 
   static pw.TextStyle get body => const pw.TextStyle(fontSize: 11);
-  static pw.TextStyle get bodyBold => pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold);
-  static pw.TextStyle get title => pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold);
+  static pw.TextStyle get bodyBold => const pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold);
+  static pw.TextStyle get title => const pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold);
   static pw.TextStyle get small => const pw.TextStyle(fontSize: 10);
   static pw.TextStyle get tiny => const pw.TextStyle(fontSize: 9);
 
@@ -218,11 +218,11 @@ class DocumentPdfLayout {
 
   static pw.Widget grandTotal(double total) {
     return pw.Container(
-      decoration: pw.BoxDecoration(
+      decoration: const pw.BoxDecoration(
         border: pw.Border(
-          left: const pw.BorderSide(color: PdfColors.black),
-          right: const pw.BorderSide(color: PdfColors.black),
-          bottom: const pw.BorderSide(color: PdfColors.black),
+          left: pw.BorderSide(color: PdfColors.black),
+          right: pw.BorderSide(color: PdfColors.black),
+          bottom: pw.BorderSide(color: PdfColors.black),
         ),
       ),
       padding: const pw.EdgeInsets.fromLTRB(6, 8, 6, 4),
@@ -312,8 +312,8 @@ class DocumentPdfLayout {
           nothingFollowsItalic: true,
           footerRows: [
             _footerRow([
-              _FooterCell('', colSpan: 5),
-              _FooterCell('TOTAL AMOUNT', align: pw.TextAlign.right, background: grayHeader, bold: true),
+              const _FooterCell('', colSpan: 5),
+              const _FooterCell('TOTAL AMOUNT', align: pw.TextAlign.right, background: grayHeader, bold: true),
               _FooterCell(formatMoney(total), align: pw.TextAlign.right, bold: true, doubleUnderline: true),
             ]),
           ],
@@ -345,24 +345,24 @@ class DocumentPdfLayout {
 
     final footerRows = <pw.TableRow>[
       _footerRow([
-        _FooterCell('', colSpan: 3),
-        _FooterCell('TOTAL AMOUNT', align: pw.TextAlign.right, background: blueBar, bold: true),
-        _FooterCell('PHP', align: pw.TextAlign.center, background: blueBar, bold: true),
+        const _FooterCell('', colSpan: 3),
+        const _FooterCell('TOTAL AMOUNT', align: pw.TextAlign.right, background: blueBar, bold: true),
+        const _FooterCell('PHP', align: pw.TextAlign.center, background: blueBar, bold: true),
         _FooterCell(formatMoney(totalAmount), align: pw.TextAlign.right, background: blueBar, bold: true),
       ]),
     ];
     if (paymentsApplied > 0) {
       footerRows.addAll([
         _footerRow([
-          _FooterCell('', colSpan: 3),
-          _FooterCell('Less: Payments', align: pw.TextAlign.right, background: blueBar, bold: true),
-          _FooterCell('PHP', align: pw.TextAlign.center, background: blueBar, bold: true),
+          const _FooterCell('', colSpan: 3),
+          const _FooterCell('Less: Payments', align: pw.TextAlign.right, background: blueBar, bold: true),
+          const _FooterCell('PHP', align: pw.TextAlign.center, background: blueBar, bold: true),
           _FooterCell(formatMoney(paymentsApplied), align: pw.TextAlign.right, background: blueBar, bold: true),
         ]),
         _footerRow([
-          _FooterCell('', colSpan: 3),
-          _FooterCell('Balance Due', align: pw.TextAlign.right, background: blueBar, bold: true),
-          _FooterCell('PHP', align: pw.TextAlign.center, background: blueBar, bold: true),
+          const _FooterCell('', colSpan: 3),
+          const _FooterCell('Balance Due', align: pw.TextAlign.right, background: blueBar, bold: true),
+          const _FooterCell('PHP', align: pw.TextAlign.center, background: blueBar, bold: true),
           _FooterCell(formatMoney(balanceDue), align: pw.TextAlign.right, background: blueBar, bold: true),
         ]),
       ]);

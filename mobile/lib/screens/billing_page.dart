@@ -8,6 +8,8 @@ import '../navigation/transaction_detail_host.dart';
 import '../services/transaction_actions.dart';
 import '../theme/app_theme.dart';
 import '../widgets/field_ui.dart';
+import '../widgets/print_document_button.dart';
+import '../widgets/transaction_workflows.dart';
 
 class BillingPage extends StatefulWidget {
   const BillingPage({super.key, required this.api});
@@ -80,71 +82,12 @@ class _BillingPageState extends State<BillingPage> {
     }
     final id = fieldRowId(row);
     if (id.isEmpty || _busyId != null) return;
-
-    final total = (row['total'] as num?)?.toDouble() ?? 0;
-    final paid = (row['paidAmount'] as num?)?.toDouble() ?? 0;
-    final remaining = (total - paid).clamp(0, double.infinity);
-    final amountController = TextEditingController(text: remaining.toStringAsFixed(2));
-    final referenceController = TextEditingController();
-    final remarksController = TextEditingController();
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Record payment'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Balance: ${fieldFormatMoney(remaining)}'),
-              const SizedBox(height: 12),
-              TextField(
-                controller: amountController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Amount'),
-              ),
-              TextField(
-                controller: referenceController,
-                decoration: const InputDecoration(labelText: 'Reference (optional)'),
-              ),
-              TextField(
-                controller: remarksController,
-                decoration: const InputDecoration(labelText: 'Remarks (optional)'),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Save')),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-
-    final amount = double.tryParse(amountController.text.trim());
-    if (amount == null || amount <= 0) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid payment amount.')),
-      );
-      return;
-    }
+    if (!canRecordBillingPayment(row)) return;
 
     setState(() => _busyId = id);
     try {
-      await widget.api.post('/billings/$id/payments', {
-        'amount': amount,
-        'date': DateTime.now().toIso8601String().split('T').first,
-        if (referenceController.text.trim().isNotEmpty) 'reference': referenceController.text.trim(),
-        if (remarksController.text.trim().isNotEmpty) 'remarks': remarksController.text.trim(),
-      });
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payment recorded.')));
-      await _load();
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyApiError(error))));
+      final updated = await recordBillingPayment(context, widget.api, row);
+      if (updated != null) await _load();
     } finally {
       if (mounted) setState(() => _busyId = null);
     }
@@ -266,34 +209,33 @@ class BillingDetailPage extends StatelessWidget {
       title: billing['id']?.toString() ?? 'Billing',
       subtitle: billing['customerName']?.toString() ?? 'Customer —',
       status: billing['paymentStatus']?.toString(),
-      actions: onRecordPayment == null
-          ? null
-          : [
-              FilledButton(
-                onPressed: () async {
-                  await onRecordPayment!();
-                  if (popAfterMutations && context.mounted) Navigator.pop(context);
-                },
-                child: const Text('Record payment'),
-              ),
-            ],
+      secondaryActions: [
+        PrintDocumentButton(
+          onPrint: () => printBilling(billing),
+          label: 'Print PDF',
+        ),
+      ],
+      primaryActions: [
+        if (onRecordPayment != null)
+          FilledButton(
+            onPressed: () async {
+              await onRecordPayment!();
+              if (popAfterMutations && context.mounted) Navigator.pop(context);
+            },
+            child: const Text('Record payment'),
+          ),
+      ],
       children: [
-        const SizedBox(height: 12),
-        Text(
-          'Billing date: ${billing['displayDate'] ?? billing['billingDate'] ?? '—'}',
-          style: const TextStyle(color: AppTheme.textSecondary),
-        ),
-        Text(
-          'Delivery receipt: ${billing['referenceDrId'] ?? '—'}',
-          style: const TextStyle(color: AppTheme.textSecondary),
-        ),
-        Text(
-          'Total: ${fieldFormatMoney(billing['total'])}',
-          style: const TextStyle(color: AppTheme.textSecondary),
-        ),
-        Text(
-          'Paid: ${fieldFormatMoney(billing['paidAmount'] ?? 0)}',
-          style: const TextStyle(color: AppTheme.textSecondary),
+        FieldDetailMeta(
+          rows: [
+            (
+              label: 'Billing date',
+              value: '${billing['displayDate'] ?? billing['billingDate'] ?? '—'}',
+            ),
+            (label: 'Delivery receipt', value: '${billing['referenceDrId'] ?? '—'}'),
+            (label: 'Total', value: fieldFormatMoney(billing['total'])),
+            (label: 'Paid', value: fieldFormatMoney(billing['paidAmount'] ?? 0)),
+          ],
         ),
         if (payments.isNotEmpty) ...[
           const SizedBox(height: 16),

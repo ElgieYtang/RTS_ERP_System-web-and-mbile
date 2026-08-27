@@ -10,6 +10,7 @@ import '../navigation/transaction_detail_host.dart';
 import '../navigation/transaction_navigation.dart';
 import '../theme/app_theme.dart';
 import '../widgets/field_ui.dart';
+import '../widgets/print_document_button.dart';
 import '../widgets/transaction_workflows.dart';
 
 class ReceivingsPage extends StatefulWidget {
@@ -99,31 +100,12 @@ class _ReceivingsPageState extends State<ReceivingsPage> {
 
     final id = row['dbId']?.toString() ?? row['id']?.toString();
     if (id == null || _busyId != null) return;
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirm receiving'),
-        content: Text('Confirm ${row['id'] ?? id}?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Confirm')),
-        ],
-      ),
-    );
-    if (ok != true) return;
+    if (!canConfirmReceiving(row)) return;
 
     setState(() => _busyId = id);
     try {
-      await widget.api.post('/receivings/$id/confirm');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Receiving confirmed')),
-      );
-      await _load();
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyApiError(error))));
+      final updated = await confirmReceiving(context, widget.api, row);
+      if (updated != null) await _load();
     } finally {
       if (mounted) setState(() => _busyId = null);
     }
@@ -134,12 +116,9 @@ class _ReceivingsPageState extends State<ReceivingsPage> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Offline')));
       return;
     }
-    final created = await showCreateOutslipDialog(
-      context,
-      widget.api,
-      initialReceivingDbId: fieldDbId(row),
-      completedReceivings: _rows.where((r) => r['status'] == 'completed').toList(),
-    );
+    if (!canCreateOutslipFromReceiving(row, _lists)) return;
+
+    final created = await createOutslipFromReceiving(context, widget.api, row);
     if (created != null) {
       await _load();
       if (!mounted) return;
@@ -260,7 +239,7 @@ class ReceivingDetailPage extends StatelessWidget {
       title: initial['id']?.toString() ?? 'Receiving',
       subtitle: supplier,
       status: initial['status']?.toString(),
-      actions: [
+      primaryActions: [
         if (pending && onConfirm != null)
           FilledButton(
             onPressed: () async {
@@ -271,38 +250,34 @@ class ReceivingDetailPage extends StatelessWidget {
           ),
         if (!pending && onCreateOutslip != null)
           FilledButton.tonal(
-            onPressed: () async {
-              await onCreateOutslip!();
-            },
+            onPressed: () async => onCreateOutslip!(),
             child: const Text('Create outslip'),
           ),
       ],
+      secondaryActions: [
+        PrintDocumentButton(
+          onPrint: () => printReceiving(initial),
+          label: 'Print PDF',
+        ),
+      ],
       children: [
-        const SizedBox(height: 12),
-        _metaRow(Icons.calendar_today_outlined, 'Date', '${initial['displayDate'] ?? initial['date'] ?? '—'}'),
-        _metaRow(Icons.receipt_long_outlined, 'PO', '${initial['purchaseOrderId'] ?? '—'}'),
+        FieldDetailMeta(
+          rows: [
+            (label: 'Date', value: '${initial['displayDate'] ?? initial['date'] ?? '—'}'),
+            (label: 'PO', value: '${initial['purchaseOrderId'] ?? '—'}'),
+          ],
+        ),
         if ((initial['remarks']?.toString() ?? '').isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Text(initial['remarks'].toString(), style: const TextStyle(color: AppTheme.textSecondary)),
+          const SizedBox(height: 10),
+          Text(
+            initial['remarks'].toString(),
+            style: const TextStyle(fontSize: 14, height: 1.5, color: AppTheme.textSecondary),
+          ),
         ],
         const SizedBox(height: 16),
         const FieldSectionTitle('Line items'),
         FieldLineItems(items: items),
       ],
-    );
-  }
-
-  Widget _metaRow(IconData icon, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: AppTheme.textSecondary),
-          const SizedBox(width: 8),
-          Text('$label: ', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-          Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
-        ],
-      ),
     );
   }
 }

@@ -1,16 +1,16 @@
 # RTS ERP — Field Mobile (Flutter)
 
-Same Laravel API as the office web app. Mobile mirrors the web **TRANSACTIONS** menu only (not Setup or Reports).
+Same Laravel API as the office web app. Mobile covers the web **TRANSACTIONS** workflow only (not Setup or Reports).
 
 ## Prerequisites
 
 - Flutter SDK on PATH (`flutter doctor` clean)
 - Android Studio + emulator (or USB device)
-- Laravel API running (`php artisan serve --host=0.0.0.0 --port=8000`)
+- Laravel API reachable from the device/emulator
 
 ## API base URL
 
-Edit `lib/config/api_config.dart`:
+Default is in `lib/config/api_config.dart`:
 
 | Where you run the app | Base URL |
 |-----------------------|----------|
@@ -18,78 +18,107 @@ Edit `lib/config/api_config.dart`:
 | Physical phone (same Wi‑Fi) | `http://YOUR-PC-LAN-IP:8000/api` |
 | iOS simulator | `http://127.0.0.1:8000/api` |
 
+Override at run time without editing code:
+
+```powershell
+flutter run --dart-define=API_BASE_URL=http://192.168.0.106:8000/api
+```
+
 Cleartext HTTP is allowed for debug in `android/app/src/main/AndroidManifest.xml`.
-
-## Flutter SDK
-
-Use the SDK under your Windows user (not another profile):
-
-`C:\Users\DELL\develop\flutter`
-
-That path is on your user PATH. Open a **new** terminal after install so `flutter` resolves there.
 
 ## Run
 
 ```powershell
-# Terminal 1 — API (reachable from emulator)
+# Terminal 1 — API (must bind 0.0.0.0 for emulator/phone)
 cd C:\erp-system\backend
-C:\wamp64\bin\php\php8.3.28\php.exe artisan serve --host=0.0.0.0 --port=8000
+php artisan serve --host=0.0.0.0 --port=8000
 
 # Terminal 2 — mobile
 cd C:\erp-system\mobile
-.\scripts\bootstrap.ps1   # repairs Android scaffold + pub get (once)
+flutter pub get
 flutter run
 ```
 
 Login with a `setup_users` account (e.g. **admin** / **p@ssw0rd**).
 
-## Phase 8 screens
+**Refresh while running:** `r` = hot reload, `R` = hot restart (use restart after navigation or theme changes).
 
-### M1
-- Login / logout (Bearer token)
-- Home (counts from API)
-- Receiving (list, detail, confirm → inventory IN)
-- Delivery receipts (list, detail, out for delivery / delivered)
-- Accomplishments (list, create, camera/gallery upload, delete photos)
+## Navigation
 
-### M2
-- Filters on receiving / deliveries
-- Offline read of last lists when API is down
-- Clearer API unreachable messages
-- Photo upload auto-retry + Retry action
+- **Dashboard** — greeting, open-task summary, 8-module icon grid, “Needs attention” chips
+- Tap any module icon to open its list
+- **Detail screens** — back button (left) and dashboard shortcut (right)
+- **Profile** — avatar menu on dashboard (sign out)
+- No side drawer or bottom tabs
 
-### M3
-- Outslips tab (approve pending → dispatch approved / inventory OUT)
-- Home count for outslips needing action
+## Modules & workflow
 
-### M4 — Transactions (same as web sidebar)
-Matches web **TRANSACTIONS** section with the same workflow actions:
+Full chain (same as web):
 
-| Step | Mobile actions |
-|------|----------------|
-| Quotation | **New**, approve, cancel, convert to PO |
-| Purchase order | Receive items → creates receiving |
-| Receiving | Confirm → **Create outslip** |
-| Outslip | **New**, approve, dispatch → **Create DR** |
-| Delivery receipt | Out for delivery, delivered → **Create billing** |
+**Quotation → PO → Receiving → Outslip → DR → Billing → Payment**
+
+| Module | Mobile actions |
+|--------|----------------|
+| Quotations | New, approve, cancel, edit (date/status), convert to PO |
+| Purchase orders | Receive items → creates receiving |
+| Receiving | Confirm → create outslip |
+| Outslips | New, approve, dispatch → create DR |
+| Delivery receipts | Out for delivery, delivered → create billing |
 | Billing | Record payment |
-| SOA | Generate by customer |
-| Accomplishments | **New**, approve, photos, PDF |
+| SOA | Generate by customer + optional date range, print PDF |
+| Accomplishments | New, edit, approve, photos, PDF |
 
-Full chain: **Quotation → PO → Receiving → Outslip → DR → Billing → Payment** (same as web).
+**Action buttons hide when not allowed** (enforced in UI and before API calls): e.g. convert to PO hides after a PO exists; receive hides when an open receiving exists; create outslip/DR/billing hide once the next document exists; record payment hides when paid.
 
-**Action buttons hide after use** (same as web): e.g. **Receive items** disappears when an open receiving exists for that PO; **Convert to PO** hides after a PO is created; **Create outslip / DR / billing** hide once the next document exists; **Record payment** hides when paid.
+Rules live in `lib/services/transaction_actions.dart`; mutations go through `lib/widgets/transaction_workflows.dart`.
 
-**Print / PDF** (detail screens or SOA): Quotation, Purchase order, Delivery receipt, SOA — same official A4 layout as web (letterhead, tables, signatures). Tap **Print / PDF** to share. Accomplishments use the **PDF** icon on the detail screen.
+## Print / PDF
 
-**Not on mobile:** Setup and Reports (inventory ledger, etc.) — office web only.
+| Document | Where |
+|----------|--------|
+| Quotation, PO, DR | Detail → Print PDF |
+| Receiving, Outslip, Billing | Detail → Print PDF |
+| SOA | After generate → Print SOA PDF |
+| Accomplishment | Detail → PDF |
 
-- **Home** + **drawer (☰)** list all transaction modules
-- Bottom tabs: Receiving, Outslips, Deliveries, Accomplishments
+Android opens the share sheet (save, email, WhatsApp, etc.). Layout matches office A4 letterhead where implemented.
 
-### PDF export
-- **Accomplishments:** detail screen → **PDF** icon (top right)
-- **Transactions:** open a quotation, PO, delivery receipt detail → **Print / PDF** (matches web A4 format)
-- **SOA:** generate statement → **Print SOA PDF**
-- Android opens the share sheet — save to Files, email, WhatsApp, etc.
-- Layout uses the same letterhead and line-item table style as the office printouts
+## Offline
+
+When the API is unreachable, list screens show the last cached data with a stale-data banner. Mutations are disabled until back online.
+
+## Not on mobile
+
+Setup (customers, suppliers, items, users) and inventory ledger reports — office web only.
+
+## Regression checklist (manual)
+
+Run on emulator or phone with API up:
+
+1. Login / logout
+2. Dashboard counts and pull-to-refresh
+3. **QTN** — create → approve → convert to PO
+4. **PO** — receive items
+5. **Receiving** — confirm → create outslip
+6. **Outslip** — approve → dispatch → create DR
+7. **DR** — out for delivery → delivered → create billing
+8. **Billing** — record payment
+9. **SOA** — pick customer, optional dates, generate + PDF
+10. **Accomplishment** — create, edit, approve, PDF
+11. Confirm invalid actions are hidden or blocked (e.g. convert after PO exists)
+
+## Project layout
+
+```
+lib/
+  config/api_config.dart      # API base URL
+  navigation/                 # Dashboard shell, detail host, modules
+  screens/                    # Per-module list/detail pages
+  services/
+    transaction_actions.dart  # When buttons show/hide
+    transaction_lists.dart    # Cross-module lookups for rules
+  widgets/
+    transaction_workflows.dart  # Dialogs + API mutations
+```
+
+`flutter analyze lib/` should report no issues before release builds.
