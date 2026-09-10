@@ -3,7 +3,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Outslip extends Model
 {
@@ -33,5 +35,15 @@ class Outslip extends Model
     public function details(): HasMany
     {
         return $this->hasMany(OutslipDetail::class, 'outslip_id');
+    }
+
+    public function gatePass(): HasOne
+    {
+        return $this->hasOne(GatePass::class, 'outslip_id');
+    }
+
+    public function receiving(): BelongsTo
+    {
+        return $this->belongsTo(Receiving::class, 'receiving_id');
     }
 }

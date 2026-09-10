@@ -6,13 +6,14 @@ import { TransactionWorkflow } from '@/components/workflow/TransactionWorkflow'
 import { useDemo } from '@/context/DemoContext'
 import { useTransactions } from '@/context/TransactionContext'
 import { formatCurrency } from '@/lib/format'
+import { findReceivingForPo } from '@/lib/receiving'
 import { getStatusDisplay } from '@/lib/status'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 
 export function PurchaseOrderDetailPage() {
   const { id } = useParams()
   const { showToast } = useDemo()
-  const { purchaseOrders, loading, createReceiving } = useTransactions()
+  const { purchaseOrders, receivings, loading, createReceiving } = useTransactions()
   const navigate = useNavigate()
   const po = purchaseOrders.find((p) => p.id === id)
 
@@ -27,6 +28,14 @@ export function PurchaseOrderDetailPage() {
   const receiveItems = async () => {
     if (po.status === 'fully_received') {
       showToast('info', 'All items have been received.')
+      return
+    }
+
+    const existing = findReceivingForPo(receivings, po)
+    if (existing) {
+      navigate(
+        `/inventory/receiving?po=${po.id}&receiving=${encodeURIComponent(existing.id)}`,
+      )
       return
     }
 

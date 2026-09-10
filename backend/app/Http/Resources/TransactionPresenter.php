@@ -4,11 +4,14 @@ namespace App\Http\Resources;
 
 use App\Models\Billing;
 use App\Models\DeliveryReceipt;
+use App\Models\GatePass;
 use App\Models\Outslip;
 use App\Models\PurchaseOrder;
 use App\Models\Quotation;
 use App\Models\Receiving;
+use App\Models\SetupCustomer;
 use App\Models\SetupItem;
+use App\Models\SetupUser;
 
 class TransactionPresenter
 {
@@ -90,6 +93,16 @@ class TransactionPresenter
             ];
         })->values()->all();
 
+        $customerId = '';
+        $customerName = '';
+        if ($po?->quotation_id) {
+            $quotation = Quotation::query()->find($po->quotation_id);
+            if ($quotation) {
+                $customerId = (string) ($quotation->customer_id ?? '');
+                $customerName = $quotation->customer_name ?? '';
+            }
+        }
+
         return [
             'id' => $receiving->receiving_no ?: ('RCV-'.str_pad((string) $receiving->id, 5, '0', STR_PAD_LEFT)),
             'dbId' => (string) $receiving->id,
@@ -97,6 +110,8 @@ class TransactionPresenter
             'purchaseOrderDbId' => (string) $receiving->po_id,
             'supplierId' => (string) ($po?->supplier_id ?? ''),
             'supplierName' => $po?->supplier_name ?? '',
+            'customerId' => $customerId,
+            'customerName' => $customerName,
             'branchId' => (string) $receiving->branch_id,
             'date' => optional($receiving->receiving_date)->format('Y-m-d'),
             'displayDate' => optional($receiving->receiving_date)->format('F j, Y'),
@@ -108,7 +123,7 @@ class TransactionPresenter
 
     public static function outslip(Outslip $outslip): array
     {
-        $outslip->loadMissing('details');
+        $outslip->loadMissing(['details', 'gatePass']);
 
         return [
             'id' => $outslip->outslip_no ?: ('OS-'.str_pad((string) $outslip->id, 5, '0', STR_PAD_LEFT)),
@@ -120,14 +135,89 @@ class TransactionPresenter
             'date' => optional($outslip->outslip_date)->format('Y-m-d'),
             'displayDate' => optional($outslip->outslip_date)->format('F j, Y'),
             'status' => self::outslipStatusToFrontend($outslip->status),
+            'gatePass' => $outslip->gatePass
+                ? self::gatePass($outslip->gatePass)
+                : null,
             'items' => $outslip->details->map(fn ($line) => [
                 'productId' => (string) $line->item_id,
                 'productName' => $line->item_name,
                 'quantity' => (float) $line->qty,
                 'unitPrice' => (float) $line->price,
                 'amount' => (float) $line->amount,
+                'unit' => 'PC/S',
             ])->values()->all(),
         ];
+    }
+
+    public static function gatePass(GatePass $gatePass): array
+    {
+        return [
+            'id' => (string) $gatePass->id,
+            'gatePassNo' => $gatePass->gate_pass_no,
+            'outslipId' => (string) $gatePass->outslip_id,
+            'vehicleNo' => $gatePass->vehicle_no ?? '',
+            'driverName' => $gatePass->driver_name ?? '',
+            'plateNo' => $gatePass->plate_no ?? '',
+            'destination' => $gatePass->destination ?? '',
+            'remarks' => $gatePass->remarks ?? '',
+            'status' => strtolower((string) $gatePass->status),
+            'exitAt' => optional($gatePass->exit_at)->format('Y-m-d H:i:s'),
+            'displayExitAt' => optional($gatePass->exit_at)->format('F j, Y g:i A'),
+            'displayTimeOut' => optional($gatePass->exit_at)->format('h:i A'),
+        ];
+    }
+
+    public static function gatePassDocument(Outslip $outslip, GatePass $gatePass): array
+    {
+        $outslip->loadMissing(['details', 'receiving.purchaseOrder']);
+        $customer = SetupCustomer::query()->find($outslip->customer_id);
+        $preparer = $gatePass->prepared_by
+            ? SetupUser::query()->find($gatePass->prepared_by)
+            : null;
+
+        $itemIds = $outslip->details->pluck('item_id')->filter()->unique()->values();
+        $setupItems = SetupItem::query()
+            ->with(['brand', 'model', 'unitMeasure'])
+            ->whereIn('id', $itemIds)
+            ->get()
+            ->keyBy('id');
+
+        $items = $outslip->details->map(function ($line) use ($setupItems) {
+            $setup = $setupItems->get($line->item_id);
+
+            return [
+                'productId' => (string) $line->item_id,
+                'productCode' => 'ITM-'.str_pad((string) $line->item_id, 4, '0', STR_PAD_LEFT),
+                'productName' => $line->item_name,
+                'brand' => $setup?->brand?->name ?? '',
+                'model' => $setup?->model?->name ?? '',
+                'quantity' => (float) $line->qty,
+                'unit' => $setup?->unitMeasure?->name ?: 'UNIT',
+            ];
+        })->values()->all();
+
+        $purchaseOrder = $outslip->receiving?->purchaseOrder;
+        $destination = trim((string) ($gatePass->destination ?? ''));
+        if ($destination === '') {
+            $destination = trim((string) ($customer?->address ?? ''));
+        }
+
+        return array_merge(self::gatePass($gatePass), [
+            'outslipNo' => $outslip->outslip_no ?: ('OS-'.str_pad((string) $outslip->id, 5, '0', STR_PAD_LEFT)),
+            'outslipDbId' => (string) $outslip->id,
+            'purchaseOrderNo' => $purchaseOrder?->po_no
+                ?? ($purchaseOrder ? 'PO-'.str_pad((string) $purchaseOrder->id, 5, '0', STR_PAD_LEFT) : ''),
+            'customerId' => (string) ($outslip->customer_id ?? ''),
+            'customerName' => $outslip->customer_name ?: ($customer?->name ?? ''),
+            'destination' => $destination,
+            'purpose' => 'Delivery of items per Outslip',
+            'displayDate' => optional($outslip->outslip_date)->format('F j, Y'),
+            'date' => optional($outslip->outslip_date)->format('Y-m-d'),
+            'preparedByName' => $preparer?->name ?: 'WEB ADMINISTRATOR',
+            'authorizedByName' => 'Admin',
+            'outslipStatus' => self::outslipStatusToFrontend($outslip->status),
+            'items' => $items,
+        ]);
     }
 
     public static function deliveryReceipt(DeliveryReceipt $delivery): array

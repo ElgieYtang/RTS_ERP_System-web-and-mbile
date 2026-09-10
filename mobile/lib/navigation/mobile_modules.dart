@@ -46,7 +46,7 @@ const mobileModules = <MobileModuleInfo>[
     title: 'Quotations',
     subtitle: 'Approve and convert to PO',
     icon: Icons.request_quote_outlined,
-    gridLabel: 'Quotes',
+    gridLabel: 'Quotations',
   ),
   MobileModuleInfo(
     id: MobileModule.purchaseOrders,

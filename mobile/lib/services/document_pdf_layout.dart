@@ -138,6 +138,22 @@ class DocumentPdfLayout {
 
   static pw.TableBorder get tableBorder => pw.TableBorder.all(color: PdfColors.black, width: 0.5);
 
+  static pw.TableBorder get tableBorderNoBottom => const pw.TableBorder(
+        left: pw.BorderSide(color: PdfColors.black, width: 0.5),
+        top: pw.BorderSide(color: PdfColors.black, width: 0.5),
+        right: pw.BorderSide(color: PdfColors.black, width: 0.5),
+        horizontalInside: pw.BorderSide(color: PdfColors.black, width: 0.5),
+        verticalInside: pw.BorderSide(color: PdfColors.black, width: 0.5),
+      );
+
+  static pw.TableBorder get tableBorderNoTop => const pw.TableBorder(
+        left: pw.BorderSide(color: PdfColors.black, width: 0.5),
+        right: pw.BorderSide(color: PdfColors.black, width: 0.5),
+        bottom: pw.BorderSide(color: PdfColors.black, width: 0.5),
+        horizontalInside: pw.BorderSide(color: PdfColors.black, width: 0.5),
+        verticalInside: pw.BorderSide(color: PdfColors.black, width: 0.5),
+      );
+
   static pw.Widget quotationFooter({
     required String conformeName,
     required String conformeHint,
@@ -181,6 +197,74 @@ class DocumentPdfLayout {
           pw.Expanded(child: _signatureColumn(
             label: 'Received by:',
             hint: 'Signature Over Printed Name',
+          )),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget gatePassFooterQuad({
+    required String preparedBy,
+    required String authorizedBy,
+  }) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(top: 24),
+      child: pw.Column(
+        children: [
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Expanded(child: _signatureColumn(
+                label: 'Prepared By:',
+                name: preparedBy,
+                underlineName: true,
+              )),
+              pw.SizedBox(width: 24),
+              pw.Expanded(child: _signatureColumn(
+                label: 'Authorized By:',
+                name: authorizedBy,
+                underlineName: true,
+              )),
+            ],
+          ),
+          pw.SizedBox(height: 18),
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Expanded(child: _signatureColumn(
+                label: 'Guard on Duty:',
+                hint: 'Name / Position',
+              )),
+              pw.SizedBox(width: 24),
+              pw.Expanded(child: _signatureColumn(
+                label: 'Driver:',
+                hint: 'Signature Over Printed Name',
+              )),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget gatePassFooter({String? exitAt}) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(top: 24),
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Expanded(child: _signatureColumn(
+            label: 'Prepared by:',
+            hint: 'Signature Over Printed Name',
+            showDate: true,
+          )),
+          pw.SizedBox(width: 40),
+          pw.Expanded(child: _signatureColumn(
+            label: 'Authorized by:',
+            hint: exitAt != null && exitAt.isNotEmpty
+                ? 'Exited: $exitAt'
+                : 'Signature Over Printed Name',
+            showDate: exitAt == null || exitAt.isEmpty,
           )),
         ],
       ),
@@ -322,6 +406,50 @@ class DocumentPdfLayout {
     );
   }
 
+  static pw.Widget buildGatePassTable({
+    required List<Map<String, dynamic>> items,
+    int minRows = 6,
+  }) {
+    String dash(String? value) {
+      final text = value?.trim();
+      return text == null || text.isEmpty ? '—' : text;
+    }
+
+    final rows = <List<String>>[];
+    for (var i = 0; i < items.length; i++) {
+      final item = items[i];
+      final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
+      final name = item['productName']?.toString() ?? item['name']?.toString() ?? '';
+      final code = item['productCode']?.toString() ?? '';
+      final description = code.isEmpty ? name : '$name\n$code';
+      rows.add([
+        '${i + 1}',
+        description,
+        dash(item['brand']?.toString()),
+        dash(item['model']?.toString()),
+        qty == qty.roundToDouble() ? qty.toInt().toString() : qty.toString(),
+        item['unit']?.toString() ?? 'UNIT',
+      ]);
+    }
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text('Items to Leave Premises', style: bodyBold),
+        pw.SizedBox(height: 6),
+        _itemsTable(
+          headers: const ['No.', 'Item Description', 'Brand', 'Model / Serial No.', 'Qty', 'Unit'],
+          rows: rows,
+          headerColor: grayHeader,
+          minRows: minRows,
+          flex: const [0.5, 3.2, 1.0, 1.2, 0.7, 0.8],
+          alignRight: const [true, false, true, true, true, true],
+          nothingFollowsItalic: true,
+        ),
+      ],
+    );
+  }
+
   static pw.Widget buildSoaTable({
     required List<Map<String, dynamic>> debitRows,
     required double totalAmount,
@@ -391,6 +519,10 @@ class DocumentPdfLayout {
     bool nothingFollowsItalic = false,
     List<pw.TableRow>? footerRows,
   }) {
+    final columnWidths = {
+      for (var i = 0; i < flex.length; i++) i: pw.FlexColumnWidth(flex[i]),
+    };
+
     final tableRows = <pw.TableRow>[
       pw.TableRow(
         decoration: pw.BoxDecoration(color: headerColor),
@@ -414,26 +546,51 @@ class DocumentPdfLayout {
         pw.TableRow(
           children: List.generate(headers.length, (_) => _cell(' ')),
         ),
-      pw.TableRow(
-        children: [
-          for (var i = 0; i < headers.length; i++)
-            _cell(
-              i == headers.length ~/ 2 ? '****NOTHING FOLLOWS****' : '',
-              align: pw.TextAlign.center,
-              bold: true,
-              italic: nothingFollowsItalic,
-            ),
-        ],
-      ),
-      if (footerRows != null) ...footerRows,
     ];
 
-    return pw.Table(
-      border: tableBorder,
-      columnWidths: {
-        for (var i = 0; i < flex.length; i++) i: pw.FlexColumnWidth(flex[i]),
-      },
-      children: tableRows,
+    final hasFooter = footerRows != null && footerRows.isNotEmpty;
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        pw.Table(
+          border: tableBorderNoBottom,
+          columnWidths: columnWidths,
+          children: tableRows,
+        ),
+        _nothingFollowsBar(italic: nothingFollowsItalic, includeBottom: !hasFooter),
+        if (hasFooter)
+          pw.Table(
+            border: tableBorderNoTop,
+            columnWidths: columnWidths,
+            children: footerRows,
+          ),
+      ],
+    );
+  }
+
+  static pw.Widget _nothingFollowsBar({bool italic = false, bool includeBottom = true}) {
+    return pw.Container(
+      decoration: pw.BoxDecoration(
+        border: pw.Border(
+          left: const pw.BorderSide(color: PdfColors.black, width: 0.5),
+          right: const pw.BorderSide(color: PdfColors.black, width: 0.5),
+          bottom: includeBottom ? const pw.BorderSide(color: PdfColors.black, width: 0.5) : pw.BorderSide.none,
+        ),
+      ),
+      padding: const pw.EdgeInsets.symmetric(vertical: 6),
+      alignment: pw.Alignment.center,
+      child: pw.Text(
+        '****NOTHING FOLLOWS****',
+        textAlign: pw.TextAlign.center,
+        maxLines: 1,
+        style: pw.TextStyle(
+          fontSize: 10,
+          fontWeight: pw.FontWeight.bold,
+          fontStyle: italic ? pw.FontStyle.italic : pw.FontStyle.normal,
+          letterSpacing: 0.5,
+        ),
+      ),
     );
   }
 

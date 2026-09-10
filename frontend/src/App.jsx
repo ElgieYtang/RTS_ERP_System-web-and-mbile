@@ -26,6 +26,7 @@ import { CustomerLedgerPage } from "@/pages/reports/CustomerLedgerPage";
 import { SupplierLedgerPage } from "@/pages/reports/SupplierLedgerPage";
 import { AccomplishmentPreviewPage } from "@/pages/previews/AccomplishmentPreview";
 import { DeliveryReceiptPreviewPage } from "@/pages/previews/DeliveryReceiptPreview";
+import { GatePassPreviewPage } from "@/pages/previews/GatePassPreview";
 import { PurchaseOrderPreviewPage } from "@/pages/previews/PurchaseOrderPreview";
 import { QuotationPreviewPage } from "@/pages/previews/QuotationPreview";
 import { SOAPreviewPage } from "@/pages/previews/SOAPreview";
@@ -57,6 +58,7 @@ function App() {
       /* @__PURE__ */ jsx(Route, { path: "purchase-order/:id/preview", element: /* @__PURE__ */ jsx(PurchaseOrderPreviewPage, {}) }),
       /* @__PURE__ */ jsx(Route, { path: "outslip", element: /* @__PURE__ */ jsx(OutslipsPage, {}) }),
       /* @__PURE__ */ jsx(Route, { path: "outslip/:id", element: /* @__PURE__ */ jsx(OutslipDetailPage, {}) }),
+      /* @__PURE__ */ jsx(Route, { path: "outslip/:id/gate-pass/preview", element: /* @__PURE__ */ jsx(GatePassPreviewPage, {}) }),
       /* @__PURE__ */ jsx(Route, { path: "delivery-receipt", element: /* @__PURE__ */ jsx(DeliveryReceiptsPage, {}) }),
       /* @__PURE__ */ jsx(Route, { path: "delivery-receipt/:id", element: /* @__PURE__ */ jsx(DeliveryReceiptDetailPage, {}) }),
       /* @__PURE__ */ jsx(Route, { path: "delivery-receipt/:id/preview", element: /* @__PURE__ */ jsx(DeliveryReceiptPreviewPage, {}) }),

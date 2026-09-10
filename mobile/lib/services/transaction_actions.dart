@@ -45,6 +45,26 @@ bool canEditQuotation(Map<String, dynamic> row, TransactionLists lists) {
 bool canConvertQuotation(Map<String, dynamic> row, TransactionLists lists) =>
     row['status']?.toString() == 'approved' && findPoForQuotation(row, lists) == null;
 
+bool hasReceivingForPo(Map<String, dynamic> po, TransactionLists lists) {
+  final poDb = fieldDbId(po);
+  final poNo = po['id']?.toString();
+  return lists.receivings.any(
+    (row) =>
+        _idsMatch(row['purchaseOrderDbId'], poDb) || _idsMatch(row['purchaseOrderId'], poNo),
+  );
+}
+
+Map<String, dynamic>? findReceivingForPo(Map<String, dynamic> po, TransactionLists lists) {
+  final poDb = fieldDbId(po);
+  final poNo = po['id']?.toString();
+  for (final row in lists.receivings) {
+    if (_idsMatch(row['purchaseOrderDbId'], poDb) || _idsMatch(row['purchaseOrderId'], poNo)) {
+      return row;
+    }
+  }
+  return null;
+}
+
 bool hasOpenReceivingForPo(Map<String, dynamic> po, TransactionLists lists) {
   final poDb = fieldDbId(po);
   final poNo = po['id']?.toString();
@@ -58,7 +78,7 @@ bool hasOpenReceivingForPo(Map<String, dynamic> po, TransactionLists lists) {
 bool canReceivePurchaseOrder(Map<String, dynamic> po, TransactionLists lists) {
   final status = po['status']?.toString() ?? '';
   if (status == 'fully_received' || status == 'cancelled') return false;
-  return !hasOpenReceivingForPo(po, lists);
+  return !hasReceivingForPo(po, lists);
 }
 
 bool canConfirmReceiving(Map<String, dynamic> row) =>
@@ -69,16 +89,27 @@ bool hasOutslipForReceiving(Map<String, dynamic> receiving, TransactionLists lis
   return lists.outslips.any((row) => _idsMatch(row['receivingId'], rcvDb));
 }
 
+bool receivingHasQuotationCustomer(Map<String, dynamic> receiving) {
+  final id = receiving['customerId']?.toString();
+  return id != null && id.isNotEmpty;
+}
+
 bool canCreateOutslipFromReceiving(
   Map<String, dynamic> receiving,
   TransactionLists lists,
 ) =>
     receiving['status']?.toString() == 'completed' &&
+    receivingHasQuotationCustomer(receiving) &&
     !hasOutslipForReceiving(receiving, lists);
 
 bool canApproveOutslip(Map<String, dynamic> row) => row['status']?.toString() == 'pending';
 
 bool canDispatchOutslip(Map<String, dynamic> row) => row['status']?.toString() == 'approved';
+
+bool canPrintGatePass(Map<String, dynamic> row) {
+  final status = row['status']?.toString() ?? '';
+  return status == 'approved' || status == 'for_dispatch' || status == 'released';
+}
 
 bool isOutslipReadyForDr(String? status) {
   final value = (status ?? '').toLowerCase();

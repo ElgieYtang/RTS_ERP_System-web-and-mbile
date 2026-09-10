@@ -12,6 +12,21 @@ void showTransactionActionBlocked(BuildContext context, String message) {
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 }
 
+Map<String, dynamic>? _findReceiving(List<Map<String, dynamic>> receivings, String id) {
+  for (final row in receivings) {
+    if (row['dbId']?.toString() == id || row['id']?.toString() == id) {
+      return row;
+    }
+  }
+  return null;
+}
+
+String? _customerIdFromReceiving(Map<String, dynamic>? receiving) {
+  final id = receiving?['customerId']?.toString();
+  if (id == null || id.isEmpty) return null;
+  return id;
+}
+
 Future<Map<String, dynamic>?> showCreateOutslipDialog(
   BuildContext context,
   ApiClient api, {
@@ -59,76 +74,142 @@ Future<Map<String, dynamic>?> showCreateOutslipDialog(
         .toList();
     if (receivings.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No receivings are ready for a new outslip.')),
+        const SnackBar(
+          content: Text(
+            'No receivings with a linked quotation customer are ready for a new outslip.',
+          ),
+        ),
+      );
+      return null;
+    }
+  } else {
+    receivings = receivings
+        .where((row) => _customerIdFromReceiving(row) != null)
+        .toList();
+    if (receivings.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No completed receivings with a linked quotation customer are available.',
+          ),
+        ),
       );
       return null;
     }
   }
 
-  var customerId = customers.first['id']?.toString() ?? '';
   var receivingDbId = initialReceivingDbId ??
       receivings.first['dbId']?.toString() ??
       receivings.first['id']?.toString() ??
       '';
+  final initialReceiving = _findReceiving(receivings, receivingDbId);
+  var customerId = _customerIdFromReceiving(initialReceiving) ?? '';
+  if (customerId.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('This receiving has no quotation customer. Outslip cannot be created.'),
+      ),
+    );
+    return null;
+  }
 
   final created = await showDialog<Map<String, dynamic>?>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => AlertDialog(
+      builder: (context, setDialogState) {
+        final selectedReceiving = _findReceiving(receivings, receivingDbId);
+        final lockedCustomerId = _customerIdFromReceiving(selectedReceiving);
+        var customerLabel = selectedReceiving?['customerName']?.toString() ?? '';
+        if (customerLabel.isEmpty && lockedCustomerId != null) {
+          for (final row in customers) {
+            if (row['id']?.toString() == lockedCustomerId) {
+              customerLabel = row['name']?.toString() ?? 'Customer';
+              break;
+            }
+          }
+        }
+        if (customerLabel.isEmpty) {
+          customerLabel = 'Customer';
+        }
+
+        return AlertDialog(
         title: const Text('New outslip'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                key: ValueKey('outslip-customer-$customerId'),
-                initialValue: customerId,
-                decoration: const InputDecoration(
-                  labelText: 'Customer',
-                  border: OutlineInputBorder(),
-                ),
-                items: customers
-                    .map(
-                      (row) => DropdownMenuItem(
-                        value: row['id']?.toString() ?? '',
-                        child: Text(row['name']?.toString() ?? 'Customer'),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (value) => setDialogState(() => customerId = value ?? customerId),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        content: FieldDialogForm(
+          children: [
+            DropdownButtonFormField<String>(
+              key: ValueKey('outslip-receiving-$receivingDbId'),
+              isExpanded: true,
+              initialValue: receivingDbId,
+              decoration: const InputDecoration(
+                labelText: 'From receiving (completed)',
+                border: OutlineInputBorder(),
               ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                key: ValueKey('outslip-receiving-$receivingDbId'),
-                initialValue: receivingDbId,
-                decoration: const InputDecoration(
-                  labelText: 'From receiving (completed)',
-                  border: OutlineInputBorder(),
-                ),
-                items: receivings
-                    .map(
-                      (row) => DropdownMenuItem(
-                        value: row['dbId']?.toString() ?? row['id']?.toString() ?? '',
-                        child: Text(
-                          '${row['id'] ?? 'RCV'} — ${row['supplierName'] ?? 'Receiving'}',
-                        ),
+              items: receivings
+                  .map(
+                    (row) => DropdownMenuItem(
+                      value: row['dbId']?.toString() ?? row['id']?.toString() ?? '',
+                      child: Text(
+                        '${row['id'] ?? 'RCV'} — ${row['supplierName'] ?? 'Receiving'}',
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                       ),
-                    )
-                    .toList(),
-                onChanged: (value) => setDialogState(() => receivingDbId = value ?? receivingDbId),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) => setDialogState(() {
+                receivingDbId = value ?? receivingDbId;
+                final linked = _customerIdFromReceiving(_findReceiving(receivings, receivingDbId));
+                customerId = linked ?? '';
+              }),
+            ),
+            const SizedBox(height: 12),
+            InputDecorator(
+              decoration: const InputDecoration(
+                labelText: 'Customer',
+                border: OutlineInputBorder(),
+                helperText: 'Set from the quotation linked to this receiving.',
               ),
-            ],
-          ),
+              child: Text(
+                customerLabel,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ),
+            if (lockedCustomerId == null)
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text(
+                  'This receiving has no quotation customer. Outslip cannot be created.',
+                  style: TextStyle(color: Colors.red, fontSize: 12),
+                ),
+              ),
+          ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           FilledButton(
-            onPressed: () async {
+            onPressed: lockedCustomerId == null
+                ? null
+                : () async {
               final customer = int.tryParse(customerId);
               final receiving = int.tryParse(receivingDbId);
               if (customer == null || receiving == null) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Select a customer and receiving.')),
+                );
+                return;
+              }
+              final linkedCustomerId = _customerIdFromReceiving(
+                _findReceiving(receivings, receivingDbId),
+              );
+              if (linkedCustomerId == null || customer.toString() != linkedCustomerId) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'This receiving has no quotation customer. Outslip cannot be created.',
+                    ),
+                  ),
                 );
                 return;
               }
@@ -149,7 +230,8 @@ Future<Map<String, dynamic>?> showCreateOutslipDialog(
             child: const Text('Create'),
           ),
         ],
-      ),
+      );
+      },
     ),
   );
 
@@ -210,10 +292,16 @@ Future<Map<String, dynamic>?> receivePurchaseOrder(
 ) async {
   final id = fieldDbId(po);
   if (id.isEmpty) return null;
+
+  final existing = findReceivingForPo(po, lists);
+  if (existing != null) {
+    return existing;
+  }
+
   if (!canReceivePurchaseOrder(po, lists)) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Receiving already in progress or PO is completed.')),
+        const SnackBar(content: Text('This purchase order cannot receive items.')),
       );
     }
     return null;
@@ -298,7 +386,7 @@ Future<Map<String, dynamic>?> createOutslipFromReceiving(
   if (!canCreateOutslipFromReceiving(receiving, lists)) {
     showTransactionActionBlocked(
       context,
-      'An outslip already exists or this receiving is not completed.',
+      'This receiving is not completed, has no quotation customer, or already has an outslip.',
     );
     return null;
   }

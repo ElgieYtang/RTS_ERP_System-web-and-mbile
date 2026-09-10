@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { FormField, Input, Label } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 import { useDemo } from '@/context/DemoContext'
 import { useTransactions } from '@/context/TransactionContext'
 import { useSetupResource } from '@/hooks/useSetupResource'
@@ -36,6 +37,17 @@ export function AddQuotationModal({ open, onClose }) {
   const activeItems = useMemo(
     () => itemsCatalog.rows.filter((item) => item.status !== 'Inactive'),
     [itemsCatalog.rows],
+  )
+  const itemOptions = useMemo(
+    () =>
+      activeItems.map((product) => ({
+        value: product.id,
+        label: `${product.code ? `${product.code} — ` : ''}${product.name}`,
+        searchText: [product.code, product.name, product.brand, product.model]
+          .filter(Boolean)
+          .join(' '),
+      })),
+    [activeItems],
   )
 
   const [customerId, setCustomerId] = useState('')
@@ -193,19 +205,13 @@ export function AddQuotationModal({ open, onClose }) {
                   className="grid grid-cols-1 gap-3 rounded-lg border border-border p-3 sm:grid-cols-[minmax(0,2fr)_100px_120px_120px_auto]"
                 >
                   <FormField label={index === 0 ? 'Item' : undefined}>
-                    <select
+                    <SearchableSelect
                       value={item.productId}
-                      onChange={(event) => handleProductChange(index, event.target.value)}
-                      className="h-9 w-full rounded-md border border-border-input bg-surface px-3 text-sm"
-                    >
-                      <option value="">Select item...</option>
-                      {activeItems.map((product) => (
-                        <option key={product.id} value={product.id}>
-                          {product.code ? `${product.code} — ` : ''}
-                          {product.name}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(productId) => handleProductChange(index, productId)}
+                      options={itemOptions}
+                      placeholder="Type to search item..."
+                      emptyMessage="No items match your search"
+                    />
                   </FormField>
 
                   <FormField label={index === 0 ? 'Qty' : undefined}>

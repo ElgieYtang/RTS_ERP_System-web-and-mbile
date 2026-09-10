@@ -320,6 +320,124 @@ class DocumentPrint {
     await Printing.sharePdf(bytes: bytes, filename: '${receiving['id'] ?? 'receiving'}.pdf');
   }
 
+  static Future<void> shareGatePass(
+    ApiClient api,
+    Map<String, dynamic> outslip, {
+    Map<String, dynamic>? documentOverride,
+  }) async {
+    final detail = await _ensureOutslipDetail(api, outslip);
+    final outslipRef = _documentRef(detail);
+    Map<String, dynamic>? document = documentOverride;
+
+    if (document == null && outslipRef.isNotEmpty) {
+      try {
+        final response = await api.request('GET', '/outslips/$outslipRef/gate-pass');
+        if (response is Map && response['data'] is Map) {
+          document = Map<String, dynamic>.from(response['data'] as Map);
+        }
+      } catch (_) {
+        document = null;
+      }
+    }
+
+    final Map<String, dynamic> doc = document ??
+        {
+          'gatePassNo': 'GP-${detail['id']?.toString().replaceAll(RegExp(r'^OS-'), '') ?? '—'}',
+          'outslipNo': detail['id']?.toString(),
+          'customerName': detail['customerName']?.toString(),
+          'displayDate': detail['displayDate']?.toString() ?? detail['date']?.toString(),
+          'purpose': 'Delivery of items per Outslip',
+          'items': _itemsFromRow(detail),
+        };
+
+    String dash(String? value) {
+      final text = value?.trim();
+      return text == null || text.isEmpty ? '—' : text;
+    }
+
+    final items = (doc['items'] as List<dynamic>? ?? const [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+    final gatePassNo = doc['gatePassNo']?.toString() ?? 'gate-pass';
+
+    final bytes = await _buildPdf((logo) => [
+          DocumentPdfLayout.letterhead(logo),
+          pw.SizedBox(height: 8),
+          DocumentPdfLayout.doubleRule(),
+          pw.SizedBox(height: 8),
+          DocumentPdfLayout.centeredTitle('GATE PASS'),
+          pw.SizedBox(height: 8),
+          DocumentPdfLayout.doubleRule(),
+          pw.SizedBox(height: 4),
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    DocumentPdfLayout.fieldLine('Released to:', doc['customerName']?.toString(), labelWidth: 88),
+                    DocumentPdfLayout.fieldLine('Destination:', doc['destination']?.toString(), labelWidth: 88),
+                  ],
+                ),
+              ),
+              pw.SizedBox(width: 16),
+              pw.SizedBox(
+                width: 180,
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    DocumentPdfLayout.fieldLine(
+                      'Date:',
+                      doc['displayDate']?.toString() ?? doc['date']?.toString(),
+                      labelWidth: 88,
+                    ),
+                    DocumentPdfLayout.fieldLine('Time Out:', doc['displayTimeOut']?.toString(), labelWidth: 88),
+                    DocumentPdfLayout.fieldLine('Gate Pass No.:', doc['gatePassNo']?.toString(), labelWidth: 88),
+                    DocumentPdfLayout.fieldLine('Outslip No.:', doc['outslipNo']?.toString(), labelWidth: 88),
+                    DocumentPdfLayout.fieldLine('PO No.:', doc['purchaseOrderNo']?.toString(), labelWidth: 88),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 8),
+          pw.Text(
+            'Purpose: ${doc['purpose']?.toString() ?? 'Delivery of items per Outslip'}',
+            style: DocumentPdfLayout.body,
+          ),
+          pw.SizedBox(height: 8),
+          DocumentPdfLayout.fieldLine('Vehicle:', doc['vehicleNo']?.toString()),
+          DocumentPdfLayout.fieldLine('Plate No.:', doc['plateNo']?.toString()),
+          DocumentPdfLayout.fieldLine('Driver:', doc['driverName']?.toString()),
+          pw.SizedBox(height: 8),
+          DocumentPdfLayout.singleRule(),
+          DocumentPdfLayout.buildGatePassTable(items: items),
+          pw.SizedBox(height: 8),
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.all(8),
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.black),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text('Remarks', style: DocumentPdfLayout.bodyBold),
+                pw.SizedBox(height: 4),
+                pw.Text(dash(doc['remarks']?.toString()), style: DocumentPdfLayout.body),
+              ],
+            ),
+          ),
+          DocumentPdfLayout.gatePassFooterQuad(
+            preparedBy: doc['preparedByName']?.toString() ?? 'WEB ADMINISTRATOR',
+            authorizedBy: doc['authorizedByName']?.toString() ?? 'Admin',
+          ),
+        ]);
+    await _presentPdf(bytes, gatePassNo);
+  }
+
   static Future<void> shareOutslip(Map<String, dynamic> outslip) async {
     final items = _itemsFromRow(outslip);
     final total = _grandTotal(outslip, items);
@@ -537,5 +655,40 @@ class DocumentPrint {
       ),
     );
     return doc.save();
+  }
+
+  static String _documentRef(Map<String, dynamic> row) {
+    final dbId = row['dbId']?.toString();
+    if (dbId != null && dbId.isNotEmpty) return dbId;
+    return row['id']?.toString() ?? '';
+  }
+
+  static Future<Map<String, dynamic>> _ensureOutslipDetail(
+    ApiClient api,
+    Map<String, dynamic> outslip,
+  ) async {
+    final hasItems = (outslip['items'] as List?)?.isNotEmpty == true;
+    if (hasItems) return outslip;
+
+    final ref = _documentRef(outslip);
+    if (ref.isEmpty) return outslip;
+
+    try {
+      final response = await api.request('GET', '/outslips/$ref');
+      if (response is Map && response['data'] is Map) {
+        return Map<String, dynamic>.from(response['data'] as Map);
+      }
+    } catch (_) {}
+
+    return outslip;
+  }
+
+  static Future<void> _presentPdf(Uint8List bytes, String name) async {
+    final filename = name.replaceAll('/', '-');
+    await Printing.layoutPdf(
+      onLayout: (_) async => bytes,
+      name: filename,
+      format: DocumentPdfLayout.pageFormat,
+    );
   }
 }

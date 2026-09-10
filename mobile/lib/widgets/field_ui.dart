@@ -276,6 +276,28 @@ class FieldQuietState extends StatelessWidget {
   }
 }
 
+class FieldDialogForm extends StatelessWidget {
+  const FieldDialogForm({super.key, required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.55,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: children,
+        ),
+      ),
+    );
+  }
+}
+
 class FieldSectionTitle extends StatelessWidget {
   const FieldSectionTitle(this.text, {super.key});
 

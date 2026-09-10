@@ -19,6 +19,7 @@ class ResetTransactions extends Command
         'customer_ledger',
         'delivery_details',
         'delivery_main',
+        'gate_pass_main',
         'outslip_details',
         'outslip_main',
         'inventory',

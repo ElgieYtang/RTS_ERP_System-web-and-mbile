@@ -92,9 +92,22 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
     }
     final id = fieldDbId(row);
     if (id.isEmpty || _busyId != null) return;
+
+    final existing = findReceivingForPo(row, _lists);
+    if (existing != null) {
+      await openCreatedTransaction(
+        context,
+        widget.api,
+        MobileModule.receiving,
+        existing,
+        popCurrentRoute: popCurrentRoute,
+      );
+      return;
+    }
+
     if (!canReceivePurchaseOrder(row, _lists)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Receiving already in progress or PO is completed.')),
+        const SnackBar(content: Text('This purchase order cannot receive items.')),
       );
       return;
     }

@@ -83,6 +83,25 @@ function dispatchOutslip(id) {
   })
 }
 
+function fetchGatePass(outslipId) {
+  return request(`/outslips/${encodeURIComponent(outslipId)}/gate-pass`).then(
+    (payload) => payload.data,
+  )
+}
+
+function saveGatePass(outslipId, data) {
+  return request(`/outslips/${encodeURIComponent(outslipId)}/gate-pass`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }).then((payload) => payload.data)
+}
+
+function markGatePassExit(outslipId) {
+  return request(`/outslips/${encodeURIComponent(outslipId)}/gate-pass/exit`, {
+    method: 'POST',
+  }).then((payload) => payload.data)
+}
+
 function fetchDeliveryReceipts() {
   return request('/delivery-receipts').then((payload) => payload.data ?? [])
 }
@@ -132,13 +151,16 @@ export {
   dispatchOutslip,
   fetchBillings,
   fetchDeliveryReceipts,
+  fetchGatePass,
   fetchOutslips,
   fetchPurchaseOrder,
   fetchPurchaseOrders,
   fetchQuotation,
   fetchQuotations,
   fetchReceivings,
+  markGatePassExit,
   recordBillingPayment,
+  saveGatePass,
   updateDeliveryStatus,
   updateQuotation,
 }

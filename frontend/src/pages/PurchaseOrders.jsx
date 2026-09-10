@@ -19,15 +19,16 @@ import { EmptyState, TableFilters } from "@/components/ui/table-filters";
 import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { useDemo } from "@/context/DemoContext";
 import { useTransactions } from "@/context/TransactionContext";
-import { formatCurrency } from "@/lib/format";
-import { filterByDateRange } from "@/lib/dateFilter";
+import { formatCurrency } from '@/lib/format'
+import { findReceivingForPo } from '@/lib/receiving'
+import { filterByDateRange } from '@/lib/dateFilter'
 import { getStatusDisplay } from "@/lib/status";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 function PurchaseOrdersPage() {
   const { showToast } = useDemo();
-  const { purchaseOrders, loading, createReceiving } = useTransactions();
+  const { purchaseOrders, receivings, loading, createReceiving } = useTransactions();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [search, setSearch] = useState("");
@@ -58,6 +59,11 @@ function PurchaseOrdersPage() {
     const po = purchaseOrders.find((p) => p.id === poId);
     if (po?.status === "fully_received") {
       showToast("info", "All items have been received.");
+      return;
+    }
+    const existing = findReceivingForPo(receivings, po);
+    if (existing) {
+      navigate(`/inventory/receiving?po=${poId}&receiving=${encodeURIComponent(existing.id)}`);
       return;
     }
     try {

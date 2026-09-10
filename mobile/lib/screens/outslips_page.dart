@@ -8,6 +8,8 @@ import '../navigation/transaction_detail_host.dart';
 import '../navigation/transaction_navigation.dart';
 import '../services/transaction_actions.dart';
 import '../services/transaction_lists.dart';
+import '../theme/app_theme.dart';
+import 'gate_pass_page.dart';
 import '../widgets/field_ui.dart';
 import '../widgets/print_document_button.dart';
 import '../widgets/transaction_workflows.dart';
@@ -304,6 +306,7 @@ class _OutslipsPageState extends State<OutslipsPage> {
 class OutslipDetailPage extends StatelessWidget {
   const OutslipDetailPage({
     super.key,
+    required this.api,
     required this.outslip,
     this.popAfterMutations = true,
     this.onApprove,
@@ -311,6 +314,7 @@ class OutslipDetailPage extends StatelessWidget {
     this.onCreateDr,
   });
 
+  final ApiClient api;
   final Map<String, dynamic> outslip;
   final bool popAfterMutations;
   final Future<void> Function()? onApprove;
@@ -333,9 +337,22 @@ class OutslipDetailPage extends StatelessWidget {
       subtitle: customer,
       status: status,
       secondaryActions: [
+        if (canPrintGatePass(outslip))
+          OutlinedButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => GatePassPage(api: api, outslip: outslip),
+                ),
+              );
+            },
+            icon: const Icon(Icons.badge_outlined, color: AppTheme.maroon),
+            label: const Text('Gate pass'),
+          ),
         PrintDocumentButton(
           onPrint: () => printOutslip(outslip),
-          label: 'Print PDF',
+          label: 'Outslip PDF',
         ),
       ],
       primaryActions: [

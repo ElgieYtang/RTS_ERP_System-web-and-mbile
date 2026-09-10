@@ -54,6 +54,9 @@ Route::middleware(AuthenticateApiToken::class)->group(function () {
     Route::get('/outslips/{id}', [OutslipController::class, 'show']);
     Route::post('/outslips/{id}/approve', [OutslipController::class, 'approve']);
     Route::post('/outslips/{id}/dispatch', [OutslipController::class, 'dispatch']);
+    Route::get('/outslips/{id}/gate-pass', [OutslipController::class, 'showGatePass']);
+    Route::put('/outslips/{id}/gate-pass', [OutslipController::class, 'saveGatePass']);
+    Route::post('/outslips/{id}/gate-pass/exit', [OutslipController::class, 'markGatePassExit']);
 
     Route::get('/delivery-receipts', [DeliveryReceiptController::class, 'index']);
     Route::post('/delivery-receipts', [DeliveryReceiptController::class, 'store']);

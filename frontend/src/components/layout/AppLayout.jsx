@@ -9,13 +9,26 @@ function AppLayout() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const location = useLocation()
   const { error, refreshAll } = useTransactions()
+  const isPrintPreview = location.pathname.includes('/preview')
   const isDetailRoute =
+    !isPrintPreview &&
     /\/(quotations|purchase-order|outslip|delivery-receipt)\/[^/]+$/.test(location.pathname) &&
     !location.pathname.endsWith('/preview')
 
   useEffect(() => {
     setMobileNavOpen(false)
   }, [location.pathname])
+
+  if (isPrintPreview) {
+    return (
+      <div className="document-preview-shell min-h-screen">
+        <main className="document-preview-main">
+          <Outlet />
+        </main>
+        <ToastContainer />
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-page">

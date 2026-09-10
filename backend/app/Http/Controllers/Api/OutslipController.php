@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TransactionPresenter;
+use App\Models\GatePass;
 use App\Models\InventoryMovement;
 use App\Models\Outslip;
+use App\Models\Quotation;
 use App\Models\Receiving;
 use App\Models\SetupCustomer;
 use App\Models\SetupItem;
@@ -20,7 +22,7 @@ class OutslipController extends Controller
     public function index(): JsonResponse
     {
         $rows = Outslip::query()
-            ->with('details')
+            ->with(['details', 'gatePass'])
             ->orderByDesc('id')
             ->get()
             ->map(fn (Outslip $outslip) => TransactionPresenter::outslip($outslip));
@@ -39,7 +41,7 @@ class OutslipController extends Controller
     {
         $payload = $request->validate([
             'customerId' => ['required', 'integer', 'exists:setup_customer,id'],
-            'receivingId' => ['nullable', 'integer', 'exists:receiving_main,id'],
+            'receivingId' => ['required', 'integer', 'exists:receiving_main,id'],
             'branchId' => ['nullable', 'integer'],
             'date' => ['nullable', 'date'],
             'items' => ['nullable', 'array', 'min:1'],
@@ -49,6 +51,25 @@ class OutslipController extends Controller
         ]);
 
         $user = $request->attributes->get('auth_user');
+        $receivingId = (int) $payload['receivingId'];
+
+        $this->assertReceivingAvailableForOutslip($receivingId);
+        $expectedCustomer = $this->customerFromReceiving($receivingId);
+
+        if (! $expectedCustomer) {
+            throw ValidationException::withMessages([
+                'receivingId' => 'This receiving has no quotation customer. An outslip cannot be created.',
+            ]);
+        }
+
+        if ((int) $payload['customerId'] !== (int) $expectedCustomer->id) {
+            throw ValidationException::withMessages([
+                'customerId' => 'Customer must match the quotation linked to this receiving ('.$expectedCustomer->name.').',
+            ]);
+        }
+
+        $payload['customerId'] = $expectedCustomer->id;
+
         $customer = SetupCustomer::query()->findOrFail($payload['customerId']);
         $lines = $this->resolveLines($payload);
 
@@ -58,7 +79,7 @@ class OutslipController extends Controller
             ]);
         }
 
-        $outslip = DB::transaction(function () use ($payload, $customer, $user, $lines) {
+        $outslip = DB::transaction(function () use ($payload, $customer, $user, $lines, $receivingId) {
             $latest = Outslip::query()->orderByDesc('id')->value('outslip_no');
 
             $outslip = Outslip::query()->create([
@@ -66,7 +87,7 @@ class OutslipController extends Controller
                 'customer_name' => $customer->name,
                 'outslip_no' => DocumentNumber::next('OS-', $latest),
                 'outslip_date' => $payload['date'] ?? now()->toDateString(),
-                'receiving_id' => (int) ($payload['receivingId'] ?? 0),
+                'receiving_id' => $receivingId,
                 'branch_id' => (int) ($payload['branchId'] ?? 1),
                 'prepared_by' => $user?->id ?? 0,
                 'status' => 'PENDING',
@@ -131,7 +152,99 @@ class OutslipController extends Controller
 
         return response()->json([
             'message' => 'Outslip marked for dispatch. Inventory has been updated.',
-            'data' => TransactionPresenter::outslip($outslip->fresh('details')),
+            'data' => TransactionPresenter::outslip($outslip->fresh(['details', 'gatePass'])),
+        ]);
+    }
+
+    public function showGatePass(string $id): JsonResponse
+    {
+        $outslip = $this->findOutslip($id);
+        $this->assertGatePassAllowed($outslip);
+
+        $gatePass = $this->findOrCreateGatePass($outslip);
+
+        return response()->json([
+            'data' => TransactionPresenter::gatePassDocument($outslip, $gatePass),
+        ]);
+    }
+
+    public function saveGatePass(Request $request, string $id): JsonResponse
+    {
+        $outslip = $this->findOutslip($id);
+        $this->assertGatePassAllowed($outslip);
+
+        $payload = $request->validate([
+            'vehicleNo' => ['nullable', 'string', 'max:255'],
+            'driverName' => ['nullable', 'string', 'max:255'],
+            'plateNo' => ['nullable', 'string', 'max:255'],
+            'destination' => ['nullable', 'string', 'max:255'],
+            'remarks' => ['nullable', 'string'],
+        ]);
+
+        $user = $request->attributes->get('auth_user');
+        $gatePass = $this->findOrCreateGatePass($outslip);
+
+        $gatePass->fill([
+            'vehicle_no' => $payload['vehicleNo'] ?? $gatePass->vehicle_no,
+            'driver_name' => $payload['driverName'] ?? $gatePass->driver_name,
+            'plate_no' => $payload['plateNo'] ?? $gatePass->plate_no,
+            'destination' => $payload['destination'] ?? $gatePass->destination,
+            'remarks' => $payload['remarks'] ?? $gatePass->remarks,
+            'prepared_by' => $gatePass->prepared_by ?: ($user?->id ?? 0),
+        ]);
+        $gatePass->save();
+
+        return response()->json([
+            'message' => 'Gate pass updated.',
+            'data' => TransactionPresenter::gatePassDocument($outslip, $gatePass->fresh()),
+        ]);
+    }
+
+    public function markGatePassExit(Request $request, string $id): JsonResponse
+    {
+        $outslip = $this->findOutslip($id);
+        $this->assertGatePassAllowed($outslip);
+
+        $gatePass = $this->findOrCreateGatePass($outslip);
+
+        if (strtoupper((string) $gatePass->status) === 'EXITED') {
+            return response()->json(['message' => 'Gate pass already marked as exited.'], 422);
+        }
+
+        $gatePass->status = 'EXITED';
+        $gatePass->exit_at = now();
+        $gatePass->save();
+
+        return response()->json([
+            'message' => 'Gate pass marked as exited.',
+            'data' => TransactionPresenter::gatePassDocument($outslip, $gatePass->fresh()),
+        ]);
+    }
+
+    private function assertGatePassAllowed(Outslip $outslip): void
+    {
+        $status = strtoupper((string) $outslip->status);
+
+        if (! in_array($status, ['APPROVED', 'FOR_DISPATCH', 'RELEASED'], true)) {
+            throw ValidationException::withMessages([
+                'outslip' => 'Gate pass is only available for approved or dispatched outslips.',
+            ]);
+        }
+    }
+
+    private function findOrCreateGatePass(Outslip $outslip): GatePass
+    {
+        $existing = GatePass::query()->where('outslip_id', $outslip->id)->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        $latest = GatePass::query()->orderByDesc('id')->value('gate_pass_no');
+
+        return GatePass::query()->create([
+            'outslip_id' => $outslip->id,
+            'gate_pass_no' => DocumentNumber::next('GP-', $latest),
+            'status' => 'PENDING',
         ]);
     }
 
@@ -195,9 +308,42 @@ class OutslipController extends Controller
         return $lines;
     }
 
+    private function assertReceivingAvailableForOutslip(int $receivingId): void
+    {
+        $exists = Outslip::query()
+            ->where('receiving_id', $receivingId)
+            ->whereNotIn('status', ['CANCELLED', 'INACTIVE'])
+            ->exists();
+
+        if ($exists) {
+            throw ValidationException::withMessages([
+                'receivingId' => 'An outslip already exists for this receiving.',
+            ]);
+        }
+    }
+
+    private function customerFromReceiving(int $receivingId): ?SetupCustomer
+    {
+        $receiving = Receiving::query()
+            ->with('purchaseOrder')
+            ->findOrFail($receivingId);
+
+        $quotationId = $receiving->purchaseOrder?->quotation_id;
+        if (! $quotationId) {
+            return null;
+        }
+
+        $quotation = Quotation::query()->find($quotationId);
+        if (! $quotation?->customer_id) {
+            return null;
+        }
+
+        return SetupCustomer::query()->find($quotation->customer_id);
+    }
+
     private function findOutslip(string $id): Outslip
     {
-        $query = Outslip::query()->with('details');
+        $query = Outslip::query()->with(['details', 'gatePass']);
 
         if (is_numeric($id)) {
             return $query->findOrFail((int) $id);

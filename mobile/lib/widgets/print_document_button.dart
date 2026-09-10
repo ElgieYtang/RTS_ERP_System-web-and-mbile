@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/api_client.dart';
 import '../services/document_print.dart';
 import '../theme/app_theme.dart';
 
@@ -50,5 +51,13 @@ Future<void> printSoa({
 Future<void> printReceiving(Map<String, dynamic> row) => DocumentPrint.shareReceiving(row);
 
 Future<void> printOutslip(Map<String, dynamic> row) => DocumentPrint.shareOutslip(row);
+
+Future<void> printGatePass(
+  BuildContext context,
+  ApiClient api,
+  Map<String, dynamic> row, {
+  Map<String, dynamic>? documentOverride,
+}) =>
+    DocumentPrint.shareGatePass(api, row, documentOverride: documentOverride);
 
 Future<void> printBilling(Map<String, dynamic> row) => DocumentPrint.shareBilling(row);

@@ -71,6 +71,7 @@ Widget buildTransactionDetailPage({
       );
     case MobileModule.outslips:
       return OutslipDetailPage(
+        api: api,
         outslip: record,
         popAfterMutations: popAfterMutations,
         onApprove: onApprove,

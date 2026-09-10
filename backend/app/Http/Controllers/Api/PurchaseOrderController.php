@@ -60,16 +60,20 @@ class PurchaseOrderController extends Controller
             ], 422);
         }
 
-        $existingOpen = Receiving::query()
+        $existing = Receiving::query()
             ->where('po_id', $po->id)
-            ->whereRaw('UPPER(status) != ?', ['COMPLETED'])
             ->with(['details', 'purchaseOrder.details'])
+            ->orderByDesc('id')
             ->first();
 
-        if ($existingOpen) {
+        if ($existing) {
+            $isOpen = strtoupper((string) $existing->status) !== 'COMPLETED';
+
             return response()->json([
-                'message' => 'An open receiving already exists for this purchase order.',
-                'data' => TransactionPresenter::receiving($existingOpen),
+                'message' => $isOpen
+                    ? 'An open receiving already exists for this purchase order.'
+                    : 'A receiving already exists for this purchase order.',
+                'data' => TransactionPresenter::receiving($existing),
             ]);
         }
 

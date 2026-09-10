@@ -16,8 +16,9 @@ import { EmptyState, TableFilters } from '@/components/ui/table-filters'
 import { useDemo } from '@/context/DemoContext'
 import { useTransactions } from '@/context/TransactionContext'
 import { filterByDateRange } from '@/lib/dateFilter'
+import { findReceivingForPo } from '@/lib/receiving'
 import { getStatusDisplay } from '@/lib/status'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
 export function ReceivingPage() {
@@ -32,6 +33,7 @@ export function ReceivingPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const poFromUrl = searchParams.get('po')
+  const receivingFromUrl = searchParams.get('receiving')
   const [search, setSearch] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -59,6 +61,20 @@ export function ReceivingPage() {
 
   const viewRec = viewId ? receivings.find((r) => r.id === viewId) : null
   const linkedPo = poFromUrl ? purchaseOrders.find((p) => p.id === poFromUrl) : null
+  const existingReceivingForPo = useMemo(
+    () => findReceivingForPo(receivings, linkedPo),
+    [receivings, linkedPo],
+  )
+
+  useEffect(() => {
+    if (receivingFromUrl) {
+      setViewId(receivingFromUrl)
+      return
+    }
+    if (poFromUrl && existingReceivingForPo) {
+      setViewId(existingReceivingForPo.id)
+    }
+  }, [poFromUrl, receivingFromUrl, existingReceivingForPo])
 
   const handleConfirm = async (recId) => {
     const rec = receivings.find((r) => r.id === recId)
@@ -81,6 +97,10 @@ export function ReceivingPage() {
 
   const handleCreateFromPo = async () => {
     if (!linkedPo) return
+    if (existingReceivingForPo) {
+      setViewId(existingReceivingForPo.id)
+      return
+    }
     setBusy(true)
     try {
       const created = await createReceiving(linkedPo.id)
@@ -109,9 +129,28 @@ export function ReceivingPage() {
         <div className="mb-4 rounded-lg border border-maroon/30 bg-maroon-light p-4 text-sm">
           <strong>PO selected:</strong> {linkedPo.id} —{' '}
           {linkedPo.items.map((item) => item.productName).join(', ')}
-          <Button size="sm" className="ml-4" onClick={handleCreateFromPo} disabled={busy}>
-            {busy ? 'Creating…' : 'New Receiving'}
-          </Button>
+          {existingReceivingForPo ? (
+            <>
+              <span className="ml-4 text-text-secondary">
+                Receiving {existingReceivingForPo.id} (
+                {existingReceivingForPo.status === 'completed' ? 'completed' : 'pending'}).
+              </span>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="ml-4"
+                onClick={() => setViewId(existingReceivingForPo.id)}
+              >
+                {existingReceivingForPo.status === 'completed'
+                  ? 'View Receiving'
+                  : 'Continue Receiving'}
+              </Button>
+            </>
+          ) : (
+            <Button size="sm" className="ml-4" onClick={handleCreateFromPo} disabled={busy}>
+              {busy ? 'Creating…' : 'New Receiving'}
+            </Button>
+          )}
         </div>
       ) : null}
 

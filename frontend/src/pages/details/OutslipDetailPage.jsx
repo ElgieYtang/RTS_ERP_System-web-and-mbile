@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { useDemo } from '@/context/DemoContext'
 import { useTransactions } from '@/context/TransactionContext'
 import { formatCurrency } from '@/lib/format'
+import { canPrintGatePass } from '@/lib/gatePass'
 import { getStatusDisplay } from '@/lib/status'
 import { useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
@@ -84,6 +85,15 @@ export function OutslipDetailPage() {
             {outslip.status === 'for_dispatch' || outslip.status === 'released' ? (
               <Button className="w-full" disabled={busy} onClick={handleCreateDR}>
                 Create Delivery Receipt
+              </Button>
+            ) : null}
+            {canPrintGatePass(outslip.status) ? (
+              <Button
+                variant="secondary"
+                className="w-full"
+                onClick={() => navigate(`/outslip/${outslip.id}/gate-pass/preview`)}
+              >
+                Print Gate Pass
               </Button>
             ) : null}
           </MobileStickyActions>
